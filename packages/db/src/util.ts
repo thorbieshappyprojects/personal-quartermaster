@@ -36,7 +36,7 @@ export interface Actor {
   memberId: string | null; // null = system
 }
 
-export type EventEntity = 'item' | 'location' | 'category' | 'document';
+export type EventEntity = 'item' | 'location' | 'category' | 'document' | 'purchase' | 'purchase_line' | 'import_run';
 
 export async function writeEvent(
   c: PoolClient,

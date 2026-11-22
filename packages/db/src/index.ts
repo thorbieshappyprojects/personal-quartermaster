@@ -7,3 +7,4 @@ export * from './places';
 export * from './items';
 export * from './documents';
 export * from './exchange';
+export * from './purchases';

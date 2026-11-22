@@ -223,42 +223,45 @@ function checkPrice(amount: number | null | undefined, currency: string | null |
   if ((amount == null) !== (currency == null)) throw new DomainError('invalid', 'price needs both an amount and a currency');
 }
 
-export async function createItem(pool: Pool, actor: Actor, input: ItemInput, opts: { captureId?: string } = {}): Promise<Item> {
+/** Inserts an item inside the caller's transaction (used by the possession check). */
+export async function insertItem(c: PoolClient, actor: Actor, input: ItemInput, opts: { captureId?: string } = {}): Promise<ItemRow> {
   checkPrice(input.priceAmountMinor, input.priceCurrency);
-  const row = await tx(pool, async (c) => {
-    await assertRefs(c, actor.householdId, {
-      categoryId: input.categoryId,
-      locationId: input.locationId,
-      personId: input.belongsToPersonId,
-      memberId: input.privateTo,
-    });
-    let kind = input.kind;
-    if (!kind && input.categoryId) {
-      const cat = await c.query<{ default_kind: ItemKind | null }>('SELECT default_kind FROM category WHERE id = $1', [input.categoryId]);
-      kind = cat.rows[0]?.default_kind ?? undefined;
-    }
-    const { rows } = await c.query<ItemRow>(
-      `INSERT INTO item AS i (household_id, kind, name, aliases, category_id, location_id, belongs_to_person_id, state, quantity, unit,
-                         min_quantity, price_amount_minor, price_currency, purchase_url, notes, tags, attributes, private_to, acquired_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING ${SELECT}`,
-      [
-        actor.householdId, kind ?? 'durable', input.name.trim(), cleanList(input.aliases), input.categoryId ?? null,
-        input.locationId ?? null, input.belongsToPersonId ?? null, input.state ?? 'owned', input.quantity ?? 1,
-        input.unit?.trim() || null, input.minQuantity ?? null, input.priceAmountMinor ?? null, input.priceCurrency ?? null,
-        input.purchaseUrl?.trim() || null, input.notes?.trim() || null, cleanList(input.tags), input.attributes ?? {},
-        input.privateTo ?? null, input.acquiredAt ?? null,
-      ],
-    );
-    const item = rows[0]!;
-    await writeEvent(c, actor, {
-      type: 'item.created',
-      entity: 'item',
-      entityId: item.id,
-      after: Object.fromEntries(TRACKED.map((k) => [k, item[k]])),
-      captureId: opts.captureId,
-    });
-    return item;
+  await assertRefs(c, actor.householdId, {
+    categoryId: input.categoryId,
+    locationId: input.locationId,
+    personId: input.belongsToPersonId,
+    memberId: input.privateTo,
   });
+  let kind = input.kind;
+  if (!kind && input.categoryId) {
+    const cat = await c.query<{ default_kind: ItemKind | null }>('SELECT default_kind FROM category WHERE id = $1', [input.categoryId]);
+    kind = cat.rows[0]?.default_kind ?? undefined;
+  }
+  const { rows } = await c.query<ItemRow>(
+    `INSERT INTO item AS i (household_id, kind, name, aliases, category_id, location_id, belongs_to_person_id, state, quantity, unit,
+                       min_quantity, price_amount_minor, price_currency, purchase_url, notes, tags, attributes, private_to, acquired_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING ${SELECT}`,
+    [
+      actor.householdId, kind ?? 'durable', input.name.trim(), cleanList(input.aliases), input.categoryId ?? null,
+      input.locationId ?? null, input.belongsToPersonId ?? null, input.state ?? 'owned', input.quantity ?? 1,
+      input.unit?.trim() || null, input.minQuantity ?? null, input.priceAmountMinor ?? null, input.priceCurrency ?? null,
+      input.purchaseUrl?.trim() || null, input.notes?.trim() || null, cleanList(input.tags), input.attributes ?? {},
+      input.privateTo ?? null, input.acquiredAt ?? null,
+    ],
+  );
+  const item = rows[0]!;
+  await writeEvent(c, actor, {
+    type: 'item.created',
+    entity: 'item',
+    entityId: item.id,
+    after: Object.fromEntries(TRACKED.map((k) => [k, item[k]])),
+    captureId: opts.captureId,
+  });
+  return item;
+}
+
+export async function createItem(pool: Pool, actor: Actor, input: ItemInput, opts: { captureId?: string } = {}): Promise<Item> {
+  const row = await tx(pool, (c) => insertItem(c, actor, input, opts));
   return (await decorate(pool, actor.householdId, [row]))[0]!;
 }
 
@@ -397,4 +400,9 @@ export async function listEvents(
     params,
   );
   return rows;
+}
+
+/** The tracked fields of an item, as recorded in the event log. */
+export function itemSnapshot(r: ItemRow): Record<string, unknown> {
+  return Object.fromEntries(TRACKED.map((k) => [k, r[k]]));
 }

@@ -3,13 +3,17 @@ import { DomainError, tx, type Db } from './util';
 
 /**
  * Tables in an export, in insert order (parents before children).
- * Not exported: api_token (credential hashes) and schema_migration (recorded in the manifest).
+ * Not exported: api_token (credential hashes), schema_migration (recorded in the manifest) and
+ * fx_rate (public reference data, fetched again).
  */
-export const EXPORT_TABLES = ['household', 'member', 'person', 'document', 'location', 'category', 'item', 'item_document', 'event'] as const;
+export const EXPORT_TABLES = [
+  'household', 'member', 'person', 'document', 'location', 'category', 'item', 'item_document',
+  'import_run', 'purchase', 'purchase_line', 'event',
+] as const;
 export type ExportTable = (typeof EXPORT_TABLES)[number];
 
 // Derived columns are rebuilt on import.
-const SKIP_COLUMNS: Partial<Record<ExportTable, string[]>> = { item: ['search_text', 'search'] };
+const SKIP_COLUMNS: Partial<Record<ExportTable, string[]>> = { item: ['search_text', 'search'], purchase_line: ['search_text'] };
 
 export type ExportData = Record<ExportTable, Record<string, unknown>[]>;
 
@@ -39,6 +43,13 @@ export async function readExportData(db: Db, householdId: string, memberId: stri
     item_document: [
       'EXISTS (SELECT 1 FROM item i WHERE i.id = t.item_id AND i.household_id = $1) AND NOT (t.item_id = ANY($2::uuid[]))',
       [hh, hiddenItems],
+    ],
+    import_run: ['t.household_id = $1', [hh]],
+    purchase: ['t.household_id = $1 AND (t.private_to IS NULL OR t.private_to = $2)', [hh, memberId]],
+    purchase_line: [
+      `t.household_id = $1 AND NOT (t.item_id = ANY($2::uuid[]) AND t.item_id IS NOT NULL)
+       AND EXISTS (SELECT 1 FROM purchase p WHERE p.id = t.purchase_id AND (p.private_to IS NULL OR p.private_to = $3))`,
+      [hh, hiddenItems, memberId],
     ],
     event: ['t.household_id = $1 AND NOT (t.entity_id = ANY($2::uuid[]))', [hh, hiddenItems]],
   };
