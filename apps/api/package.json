@@ -11,12 +11,14 @@
     "openapi": "tsx src/openapi-dump.ts"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.9",
     "@fastify/static": "^10.1.12",
     "@fastify/swagger": "^9.9.5",
     "@pq/core": "workspace:*",
     "@pq/db": "workspace:*",
     "fastify": "^5.12.8",
-    "jose": "^6.2.18"
+    "jose": "^6.2.18",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

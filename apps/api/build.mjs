@@ -13,7 +13,7 @@ await build({
   splitting: true,
   sourcemap: true,
   legalComments: 'external',
-  external: ['pg-native'],
+  external: ['pg-native', 'sharp'],
   banner: { js: "import { createRequire as __pqCreateRequire } from 'node:module'; const require = __pqCreateRequire(import.meta.url);" },
   logLevel: 'warning',
 });

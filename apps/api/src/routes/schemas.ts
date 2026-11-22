@@ -134,3 +134,6 @@ export const eventSchema = {
   },
   required: ['id', 'type', 'entity', 'entity_id', 'created_at'],
 } as const;
+
+/** Registered once on the root instance so every route plugin can $ref them. */
+export const sharedSchemas = [locationSchema, categorySchema, itemSchema, eventSchema] as const;

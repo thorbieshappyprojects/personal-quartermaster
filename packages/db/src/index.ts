@@ -5,3 +5,4 @@ export * from './members';
 export * from './util';
 export * from './places';
 export * from './items';
+export * from './documents';

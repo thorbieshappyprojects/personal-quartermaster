@@ -14,6 +14,11 @@ COPY tsconfig.base.json ./
 COPY apps apps
 COPY packages packages
 RUN pnpm --filter @pq/web --filter @pq/api build
+# sharp is native and not bundled: install exactly the locked version, for this platform, into /out.
+RUN SHARP_VERSION=$(node -p "require('./apps/api/node_modules/sharp/package.json').version") \
+ && mkdir -p /out && cd /out && printf '{"private":true,"type":"module"}' > package.json \
+ && npm install --omit=dev --no-audit --no-fund --no-package-lock "sharp@${SHARP_VERSION}" \
+ && rm package.json
 
 FROM node:22-trixie-slim
 ARG GIT_COMMIT=unknown
@@ -28,6 +33,7 @@ ENV NODE_ENV=production \
     GIT_COMMIT=${GIT_COMMIT}
 WORKDIR /app
 COPY --from=build /src/apps/api/dist/ /app/dist/
+COPY --from=build /out/node_modules/ /app/node_modules/
 COPY --from=build /src/apps/web/dist/ /app/web/
 COPY LICENSE /app/LICENSE
 RUN printf '#!/bin/sh\nexec node --enable-source-maps /app/dist/cli.mjs "$@"\n' > /usr/local/bin/pq \

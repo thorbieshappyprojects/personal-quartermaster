@@ -21,14 +21,10 @@ import {
 } from '@pq/db';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
-  categorySchema,
-  eventSchema,
   idParams,
   ITEM_STATES,
-  itemSchema,
   itemWriteProperties,
   LOCATION_KINDS,
-  locationSchema,
   name,
   nullableString,
   nullableUuid,
@@ -111,7 +107,6 @@ function parseStates(s: string | undefined): ItemState[] | undefined {
 }
 
 export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
-  for (const s of [locationSchema, categorySchema, itemSchema, eventSchema]) app.addSchema(s);
   const pool = () => app.deps.pool;
 
   // ── locations ──

@@ -7,6 +7,8 @@ import { registerAuth, type AccessVerifier } from './auth';
 import { healthRoutes } from './routes/health';
 import { memberRoutes } from './routes/members';
 import { inventoryRoutes } from './routes/inventory';
+import { mediaRoutes } from './routes/media';
+import { sharedSchemas } from './routes/schemas';
 import { webRoutes } from './routes/web';
 import { DomainError } from '@pq/db';
 
@@ -70,10 +72,12 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
     return reply.code(status).send({ error: err.validation ? 'invalid_request' : 'request_error', message: err.message });
   });
 
+  for (const schema of sharedSchemas) app.addSchema(schema);
   await registerAuth(app, deps.config.auth, deps.accessVerifier);
   await app.register(healthRoutes);
   await app.register(memberRoutes);
   await app.register(inventoryRoutes);
+  await app.register(mediaRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
