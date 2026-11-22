@@ -47,7 +47,8 @@ export async function createTestApp(
     ...configOverrides,
   };
   const diskStats = async () => ({ blocks: 100, bavail: 50 });
-  const app = await buildApp({ config, pool: db.pool, diskStats, ...extra }, { logger: process.env.PQ_TEST_LOG === "1" });
+  const fxSource = async () => [{ currency: 'USD', day: '2020-01-02', perEur: 1.25 }];
+  const app = await buildApp({ config, pool: db.pool, diskStats, fxSource, ...extra }, { logger: process.env.PQ_TEST_LOG === "1" });
   return {
     app,
     pool: db.pool,

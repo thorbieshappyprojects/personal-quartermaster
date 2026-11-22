@@ -59,13 +59,22 @@ export async function buildExport(
   return { stream: zip.outputStream as unknown as Readable, filename: `personal-quartermaster-export-${date}.zip` };
 }
 
-function readZip(buf: Buffer): Promise<Map<string, Buffer>> {
+/**
+ * Reads a zip into memory. `accept` picks the entries to read; `maxBytes` caps the total
+ * uncompressed size of those (a guard against zip bombs).
+ */
+export function readZip(buf: Buffer, opts: { accept?: (name: string) => boolean; maxBytes?: number } = {}): Promise<Map<string, Buffer>> {
+  const accept = opts.accept ?? (() => true);
+  const maxBytes = opts.maxBytes ?? Number.MAX_SAFE_INTEGER;
+  let total = 0;
   return new Promise((resolve, reject) => {
     yauzl.fromBuffer(buf, { lazyEntries: true, validateEntrySizes: true }, (err, zip) => {
       if (err || !zip) return reject(err ?? new Error('unreadable zip'));
       const files = new Map<string, Buffer>();
       zip.on('entry', (entry: yauzl.Entry) => {
-        if (/\/$/.test(entry.fileName)) return zip.readEntry();
+        if (/\/$/.test(entry.fileName) || !accept(entry.fileName)) return zip.readEntry();
+        total += entry.uncompressedSize;
+        if (total > maxBytes) return reject(new Error('zip content too large'));
         zip.openReadStream(entry, (e, stream) => {
           if (e || !stream) return reject(e);
           const chunks: Buffer[] = [];

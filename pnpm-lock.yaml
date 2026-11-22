@@ -211,6 +211,9 @@ importers:
       '@pq/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@pq/importers':
+        specifier: workspace:*
+        version: link:../../packages/importers
       fastify:
         specifier: ^5.12.8
         version: 5.12.8

@@ -9,6 +9,8 @@ import { memberRoutes } from './routes/members';
 import { inventoryRoutes } from './routes/inventory';
 import { mediaRoutes } from './routes/media';
 import { exportRoutes } from './routes/export';
+import { purchaseRoutes } from './routes/purchases';
+import type { FxSource } from './fx';
 import { sharedSchemas } from './routes/schemas';
 import { webRoutes } from './routes/web';
 import { DomainError } from '@pq/db';
@@ -20,6 +22,8 @@ export interface AppDeps {
   diskStats?: DiskStats;
   /** Override for tests; defaults to the team's remote JWKS. */
   accessVerifier?: AccessVerifier;
+  /** Override for tests; defaults to the ECB download. */
+  fxSource?: FxSource;
 }
 
 declare module 'fastify' {
@@ -80,6 +84,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
   await app.register(inventoryRoutes);
   await app.register(mediaRoutes);
   await app.register(exportRoutes);
+  await app.register(purchaseRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 

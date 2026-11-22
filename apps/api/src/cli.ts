@@ -21,6 +21,7 @@ const USAGE = `usage: pq <command> [options]
   token create --email <e> --label <l>            create an API token for a member (printed once)
   token revoke --id <token id>                    revoke an API token
   import <export.zip>                             load an export into an EMPTY installation
+  fx update                                       fetch the ECB reference rates (for purchases in other currencies)
 `;
 
 function need(v: string | undefined, flag: string): string {
@@ -119,6 +120,16 @@ async function run(argv: string[]): Promise<number> {
         ]);
         console.log(r.rowCount ? 'revoked' : 'no active token with this id');
         return r.rowCount ? 0 : 1;
+      });
+
+    case 'fx update':
+      return withPool(async (pool) => {
+        const { ecbSource } = await import('./fx');
+        const { upsertFxRates, fxStatus } = await import('@pq/db');
+        const written = await upsertFxRates(pool, await ecbSource());
+        const s = await fxStatus(pool);
+        console.log(`${written} rates stored; ${s.currencies} currencies up to ${s.latest_day}`);
+        return 0;
       });
 
     default:

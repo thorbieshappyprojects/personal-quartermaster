@@ -16,6 +16,7 @@
     "@fastify/swagger": "^9.9.5",
     "@pq/core": "workspace:*",
     "@pq/db": "workspace:*",
+    "@pq/importers": "workspace:*",
     "fastify": "^5.12.8",
     "jose": "^6.2.18",
     "sharp": "^0.35.5",
