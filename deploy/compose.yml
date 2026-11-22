@@ -1,0 +1,86 @@
+# Compose project for the server: /opt/personal-quartermaster
+# Nothing here is built on the server; the app image is pulled from GHCR.
+name: personal-quartermaster
+
+x-hardening: &hardening
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+x-app: &app
+  <<: *hardening
+  image: ghcr.io/thorbieshappyprojects/personal-quartermaster:${APP_TAG:-latest}
+  env_file: .env
+  environment:
+    NODE_ENV: production
+  read_only: true
+  tmpfs: ["/tmp:size=64m,mode=1777"]
+  volumes: ["media:/data/media"]
+  networks: [backend, egress]
+  depends_on:
+    db: { condition: service_healthy }
+  mem_limit: 640m
+
+services:
+  app:
+    <<: *app
+    healthcheck:
+      test: ["CMD", "node", "/app/dist/healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  db:
+    <<: *hardening
+    image: postgres:17
+    # Runs directly as the postgres user, so no capabilities are needed for the entrypoint.
+    user: postgres
+    environment:
+      POSTGRES_USER: pq
+      POSTGRES_DB: pq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=40", "-c", "work_mem=4MB"]
+    shm_size: 128m
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pq -d pq"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    mem_limit: 512m
+    # No published port.
+
+  tunnel:
+    <<: *hardening
+    image: cloudflare/cloudflared:2026.11.1
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    read_only: true
+    networks: [egress]
+    depends_on:
+      app: { condition: service_healthy }
+    mem_limit: 128m
+
+  # One-off commands: docker compose run --rm jobs pq <command>
+  jobs:
+    <<: *app
+    profiles: [jobs]
+    restart: "no"
+    command: ["pq", "--help"]
+
+networks:
+  # Database traffic only; no route to the outside.
+  backend:
+    internal: true
+  # Outbound for the tunnel and the app (Anthropic API, IMAP, SMTP).
+  egress: {}
+
+volumes:
+  pgdata:
+  media:
