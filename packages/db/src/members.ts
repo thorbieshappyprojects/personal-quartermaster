@@ -1,7 +1,6 @@
 import { generateApiToken, normaliseEmail, wouldRemoveLastOwner, type Role } from '@pq/core';
 import type { Pool, PoolClient } from 'pg';
-
-type Db = Pool | PoolClient;
+import { DomainError, isUniqueViolation, tx, type Db } from './util';
 
 export type { Role };
 
@@ -35,37 +34,9 @@ export interface Person {
   updated_at: Date;
 }
 
-export class DomainError extends Error {
-  constructor(
-    readonly code: 'not_found' | 'conflict' | 'last_owner' | 'already_initialised' | 'invalid',
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
 const MEMBER_COLS = ['id', 'household_id', 'display_name', 'email', 'role', 'notification_settings', 'created_at', 'updated_at'];
 const M = MEMBER_COLS.join(', ');
 const PERSON_COLS = 'id, household_id, display_name, kind, member_id, created_at, updated_at';
-
-async function tx<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
-  const c = await pool.connect();
-  try {
-    await c.query('BEGIN');
-    const r = await fn(c);
-    await c.query('COMMIT');
-    return r;
-  } catch (err) {
-    await c.query('ROLLBACK');
-    throw err;
-  } finally {
-    c.release();
-  }
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return (err as { code?: string }).code === '23505';
-}
 
 // ── household ──────────────────────────────────────────────────────────────
 
