@@ -6,3 +6,4 @@ export * from './util';
 export * from './places';
 export * from './items';
 export * from './documents';
+export * from './exchange';

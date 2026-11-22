@@ -8,6 +8,7 @@ import { healthRoutes } from './routes/health';
 import { memberRoutes } from './routes/members';
 import { inventoryRoutes } from './routes/inventory';
 import { mediaRoutes } from './routes/media';
+import { exportRoutes } from './routes/export';
 import { sharedSchemas } from './routes/schemas';
 import { webRoutes } from './routes/web';
 import { DomainError } from '@pq/db';
@@ -78,6 +79,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
   await app.register(memberRoutes);
   await app.register(inventoryRoutes);
   await app.register(mediaRoutes);
+  await app.register(exportRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 

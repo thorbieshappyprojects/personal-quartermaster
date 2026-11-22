@@ -38,7 +38,7 @@ export async function createTestApp(
     production: false,
     host: '127.0.0.1',
     port: 0,
-    logLevel: 'silent',
+    logLevel: process.env.PQ_TEST_LOG === '1' ? 'debug' : 'silent',
     databaseUrl: db.url,
     mediaDir,
     migrationsDir: sourceMigrationsDir,
@@ -47,7 +47,7 @@ export async function createTestApp(
     ...configOverrides,
   };
   const diskStats = async () => ({ blocks: 100, bavail: 50 });
-  const app = await buildApp({ config, pool: db.pool, diskStats, ...extra }, { logger: false });
+  const app = await buildApp({ config, pool: db.pool, diskStats, ...extra }, { logger: process.env.PQ_TEST_LOG === "1" });
   return {
     app,
     pool: db.pool,

@@ -111,7 +111,11 @@ export const itemWriteProperties = {
   purchase_url: { anyOf: [{ type: 'string', maxLength: 2000, pattern: '^https?://' }, { type: 'null' }] },
   notes: nullableString(5000),
   tags: stringArray,
-  attributes: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean', 'null'] }, maxProperties: 30 },
+  attributes: {
+    type: 'object',
+    additionalProperties: { anyOf: [{ type: 'string', maxLength: 500 }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] },
+    maxProperties: 30,
+  },
   private_to: nullableUuid,
   acquired_at: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }] },
 } as const;

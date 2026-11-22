@@ -20,6 +20,7 @@ const USAGE = `usage: pq <command> [options]
   member add --email <e> --name <n> [--owner]     add a member (also add them to the Access policy)
   token create --email <e> --label <l>            create an API token for a member (printed once)
   token revoke --id <token id>                    revoke an API token
+  import <export.zip>                             load an export into an EMPTY installation
 `;
 
 function need(v: string | undefined, flag: string): string {
@@ -57,6 +58,17 @@ async function run(argv: string[]): Promise<number> {
   if (values.help || !cmd) {
     console.log(USAGE);
     return 0;
+  }
+
+  if (positionals[0] === 'import') {
+    const file = positionals[1];
+    if (!file || positionals.length > 2) throw new Error('usage: pq import <export.zip>');
+    return withPool(async (pool) => {
+      const { importExportFile } = await import('./exchange');
+      const counts = await importExportFile(pool, process.env.MEDIA_DIR ?? '/data/media', file);
+      console.log('imported:', Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(', '));
+      return 0;
+    });
   }
 
   switch (cmd) {
