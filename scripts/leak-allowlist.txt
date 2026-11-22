@@ -1,0 +1,6 @@
+# Third-party author addresses that appear in bundled dependencies (package
+# metadata and licence notices). Reviewed by hand; add new ones only after
+# checking where they come from.
+hello@matteocollina.com
+kibertoad@gmail.com
+brian.m.carlson@gmail.com
