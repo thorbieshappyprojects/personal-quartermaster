@@ -1,0 +1,22 @@
+{
+  "name": "@pq/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "pq": "tsx src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node build.mjs",
+    "openapi": "tsx src/openapi-dump.ts"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^9.9.5",
+    "@pq/db": "workspace:*",
+    "fastify": "^5.12.8"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15"
+  }
+}
