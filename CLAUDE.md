@@ -59,4 +59,13 @@ ios/  shortcuts/  deploy/  scripts/  docs/
 - The image is built by GitHub Actions and pulled by the server; nothing is built on the server. The image holds no secrets or data.
 - Secrets never go through chat, the repo, shell history or CI logs. The owner writes `/opt/personal-quartermaster/.env` (mode 600). `deploy/env.production.example` lists every variable with no values.
 - Scripts: `scripts/deploy.sh [--dry-run]`, `scripts/deploy_verify.sh`, `deploy/update.sh` (backup → pull → restart → health → roll back to the previous tag on failure), `deploy/backup.sh` (pg_dump custom + media, 7 daily / 4 weekly, optional `age`), `deploy/restore.sh` (into a **new** DB only, prints row counts).
-- `/healthz` → `{ ok: true }` only if the DB answers and media has more than 10 % free; no details.
+- `/healthz` → `{ ok: true }` only if the DB answers and media has more than 10 % free; no details. It is behind the gate like every route; the container health check runs in-process (`dist/healthcheck.mjs`).
+- Migrations must stay compatible with the previous release (expand, then contract later): `update.sh` rolls back code, not schema.
+- One-off commands in the image: `docker compose run --rm jobs pq <command>` (locally: `pnpm pq <command>`).
+- Operator guide: `docs/operations.md`.
+
+## Local development
+
+- Test database: `docker run -d --name pq-test-db -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:54329:5432 postgres:17` (or set `TEST_DATABASE_URL`). Each test file creates its own database.
+- Checks: `scripts/check.sh` (typecheck, lint, test, build; stops at the first failure). E2E: `pnpm test:e2e`.
+- TypeScript is pinned to 6.0 until typescript-eslint supports 7.
