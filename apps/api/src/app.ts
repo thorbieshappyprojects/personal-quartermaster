@@ -6,6 +6,7 @@ import type { DiskStats } from './health';
 import { registerAuth, type AccessVerifier } from './auth';
 import { healthRoutes } from './routes/health';
 import { memberRoutes } from './routes/members';
+import { inventoryRoutes } from './routes/inventory';
 import { webRoutes } from './routes/web';
 import { DomainError } from '@pq/db';
 
@@ -36,6 +37,8 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
       },
     },
     bodyLimit: BODY_LIMIT,
+    // Reject unknown fields instead of silently dropping them (Fastify's default strips them).
+    ajv: { customOptions: { removeAdditional: false, allErrors: false } },
     trustProxy: true,
   });
   app.decorate('deps', deps);
@@ -70,6 +73,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
   await registerAuth(app, deps.config.auth, deps.accessVerifier);
   await app.register(healthRoutes);
   await app.register(memberRoutes);
+  await app.register(inventoryRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 

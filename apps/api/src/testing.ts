@@ -32,6 +32,7 @@ export async function createTestApp(
     hh.rows[0]!.id,
     owner.rows[0]!.id,
   ]);
+  await db.pool.query('SELECT seed_default_categories($1)', [hh.rows[0]!.id]);
   const mediaDir = await mkdtemp(join(tmpdir(), 'pq-media-'));
   const config: Config = {
     production: false,
