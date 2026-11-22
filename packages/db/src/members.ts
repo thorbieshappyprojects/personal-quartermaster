@@ -85,6 +85,7 @@ export async function initHousehold(
     const { rows } = await c.query<Household>('INSERT INTO household (name) VALUES ($1) RETURNING *', [input.name.trim()]);
     const household = rows[0]!;
     const owner = await insertMember(c, household.id, { email: input.ownerEmail, displayName: input.ownerName, role: 'owner' });
+    await c.query('SELECT seed_default_categories($1)', [household.id]);
     return { household, owner };
   });
 }
