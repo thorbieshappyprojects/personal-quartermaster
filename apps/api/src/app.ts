@@ -6,6 +6,7 @@ import type { DiskStats } from './health';
 import { registerAuth, type AccessVerifier } from './auth';
 import { healthRoutes } from './routes/health';
 import { memberRoutes } from './routes/members';
+import { webRoutes } from './routes/web';
 import { DomainError } from '@pq/db';
 
 export interface AppDeps {
@@ -71,6 +72,22 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
   await app.register(memberRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
+
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('referrer-policy', 'same-origin');
+    reply.header('x-frame-options', 'DENY');
+    reply.header(
+      'content-security-policy',
+      "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    );
+  });
+
+  if (deps.config.webDir) {
+    await app.register(webRoutes, { root: deps.config.webDir });
+  } else {
+    app.setNotFoundHandler((_req, reply) => reply.code(404).send({ error: 'not_found' }));
+  }
 
   return app;
 }

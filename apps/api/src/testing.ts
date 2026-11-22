@@ -18,7 +18,8 @@ export interface TestContext {
 
 export async function createTestApp(
   auth: AuthConfig = { mode: 'dev', email: 'owner@example.test' },
-  extra: Partial<Parameters<typeof buildApp>[0]> = {},
+  extra: Omit<Partial<Parameters<typeof buildApp>[0]>, 'config' | 'pool'> = {},
+  configOverrides: Partial<Config> = {},
 ): Promise<TestContext> {
   const db = await createTestDatabase();
   await migrate(db.pool, sourceMigrationsDir);
@@ -42,6 +43,7 @@ export async function createTestApp(
     migrationsDir: sourceMigrationsDir,
     webDir: null,
     auth,
+    ...configOverrides,
   };
   const diskStats = async () => ({ blocks: 100, bavail: 50 });
   const app = await buildApp({ config, pool: db.pool, diskStats, ...extra }, { logger: false });

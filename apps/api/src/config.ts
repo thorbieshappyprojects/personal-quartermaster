@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { sourceMigrationsDir } from '@pq/db';
 
 export type AuthConfig =
@@ -55,9 +56,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port,
     logLevel: env.LOG_LEVEL ?? 'info',
     databaseUrl: required(env, 'DATABASE_URL'),
-    mediaDir: env.MEDIA_DIR ?? '/data/media',
-    migrationsDir: env.MIGRATIONS_DIR ?? sourceMigrationsDir,
-    webDir: env.WEB_DIR ?? null,
+    mediaDir: resolve(env.MEDIA_DIR ?? '/data/media'),
+    migrationsDir: resolve(env.MIGRATIONS_DIR ?? sourceMigrationsDir),
+    webDir: env.WEB_DIR ? resolve(env.WEB_DIR) : null,
     auth: loadAuthConfig(env),
   };
 }

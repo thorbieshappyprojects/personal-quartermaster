@@ -9,3 +9,4 @@ coverage/
 deploy.env
 playwright-report/
 test-results/
+blob-report/
