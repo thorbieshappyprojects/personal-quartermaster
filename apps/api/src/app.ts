@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from '@pq/db';
 import type { Config } from './config';
 import type { DiskStats } from './health';
+import { registerAuth, type AccessVerifier } from './auth';
 import { healthRoutes } from './routes/health';
 
 export interface AppDeps {
@@ -10,6 +11,8 @@ export interface AppDeps {
   pool: Pool;
   /** Override for tests; defaults to fs.statfs. */
   diskStats?: DiskStats;
+  /** Override for tests; defaults to the team's remote JWKS. */
+  accessVerifier?: AccessVerifier;
 }
 
 declare module 'fastify' {
@@ -57,6 +60,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
     return reply.code(status).send({ error: err.validation ? 'invalid_request' : 'request_error', message: err.message });
   });
 
+  await registerAuth(app, deps.config.auth, deps.accessVerifier);
   await app.register(healthRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());

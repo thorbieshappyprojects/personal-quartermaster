@@ -190,12 +190,18 @@ importers:
       '@fastify/swagger':
         specifier: ^9.9.5
         version: 9.9.5
+      '@pq/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@pq/db':
         specifier: workspace:*
         version: link:../../packages/db
       fastify:
         specifier: ^5.12.8
         version: 5.12.8
+      jose:
+        specifier: ^6.2.18
+        version: 6.2.18
     devDependencies:
       esbuild:
         specifier: ^0.28.2
@@ -203,6 +209,8 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+
+  packages/core: {}
 
   packages/db:
     dependencies:
@@ -956,6 +964,9 @@ packages:
 
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
+
+  jose@6.2.18:
+    resolution: {integrity: sha512-doV4thUwgkrycJH4yLeqwTGIIZphHl+pk7CPReuMIhYhncmgzdko85MaCG4YQFTxqMFr1/oEH32tZuKKovcDEg==}
 
   json-schema-ref-resolver@3.0.1:
     resolution: {integrity: sha512-w+HwgljXpVwZ3IidoUR1qPZxSOQ+NRQWuVe6a5pe8XbHsNZE4UAwVPUvzZagn7yBKbJtt6UJnRFYbNTRPZI45Q==}
@@ -2119,6 +2130,8 @@ snapshots:
       is-extglob: 2.1.1
 
   isexe@2.0.0: {}
+
+  jose@6.2.18: {}
 
   json-schema-ref-resolver@3.0.1:
     dependencies:

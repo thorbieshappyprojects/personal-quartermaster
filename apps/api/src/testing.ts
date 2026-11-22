@@ -11,6 +11,8 @@ export interface TestContext {
   app: FastifyInstance;
   pool: Pool;
   mediaDir: string;
+  householdId: string;
+  ownerId: string;
   close: () => Promise<void>;
 }
 
@@ -20,6 +22,15 @@ export async function createTestApp(
 ): Promise<TestContext> {
   const db = await createTestDatabase();
   await migrate(db.pool, sourceMigrationsDir);
+  const hh = await db.pool.query<{ id: string }>("INSERT INTO household (name) VALUES ('Test household') RETURNING id");
+  const owner = await db.pool.query<{ id: string }>(
+    "INSERT INTO member (household_id, display_name, email, role) VALUES ($1, 'Owner', 'owner@example.test', 'owner') RETURNING id",
+    [hh.rows[0]!.id],
+  );
+  await db.pool.query("INSERT INTO person (household_id, display_name, kind, member_id) VALUES ($1, 'Owner', 'member', $2)", [
+    hh.rows[0]!.id,
+    owner.rows[0]!.id,
+  ]);
   const mediaDir = await mkdtemp(join(tmpdir(), 'pq-media-'));
   const config: Config = {
     production: false,
@@ -38,6 +49,8 @@ export async function createTestApp(
     app,
     pool: db.pool,
     mediaDir,
+    householdId: hh.rows[0]!.id,
+    ownerId: owner.rows[0]!.id,
     close: async () => {
       await app.close();
       await db.drop();
