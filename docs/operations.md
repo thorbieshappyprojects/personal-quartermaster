@@ -51,6 +51,15 @@ Compose project name: `personal-quartermaster`. Everything else on the server (i
 
 Migrations run when the app starts. Because a rollback runs the previous code on the new schema, migrations must stay compatible with the previous release.
 
+## Exchange rates
+
+Purchases in other currencies are converted to EUR with the ECB reference rate of the
+order day. The app downloads the ECB history (all days since 1999, about 600 kB) after an
+import that contains a foreign currency, or on "Fetch ECB rates" on the spending page.
+By hand: `docker compose run --rm jobs pq fx update`. `FX_SOURCE=off` in `.env` disables
+the download (the app then needs no outbound access for this). Rates are not household
+data and are not in the export.
+
 ## Backup and restore
 
 - `backup.sh`: `pg_dump --format=custom` plus a tarball of the media volume, 7 daily and 4 weekly copies, SHA-256 sums. With `BACKUP_REMOTE` and `BACKUP_AGE_RECIPIENT` set (and `age` and `rclone` installed), an encrypted copy goes off the server; an unencrypted remote copy is refused.

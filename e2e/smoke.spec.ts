@@ -53,3 +53,38 @@ test('M1: add an item to a new place, find it, move it', async ({ page }) => {
   // No horizontal overflow anywhere we went.
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
 });
+
+test('M2: import orders, check them quickly, see what was spent on things gone', async ({ page }) => {
+  const t = tag(page);
+  const csv = `Date,Title,Price,Currency\n2020-05-01,Sofa ${t},499.00,EUR\n2021-02-01,Toaster ${t},29.99,EUR\n2022-03-01,Shampoo ${t},4.50,EUR\n`;
+
+  await page.goto('/history/import');
+  await page.getByTestId('import-file').setInputFiles({ name: `orders-${t}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await expect(page.getByTestId('import-summary')).toContainText('3 lines');
+  await page.getByTestId('import-go').click();
+  await expect(page.getByTestId('import-result')).toContainText('3 new lines');
+  await page.getByRole('link', { name: 'Start checking' }).click();
+
+  // Only this run's lines (the other viewport imports its own).
+  await page.getByText('Filter and sort').click();
+  await page.getByLabel('Search titles').fill(t);
+  await expect(page.getByTestId('check-card')).toContainText(`Sofa ${t}`); // most expensive first
+  await page.getByRole('button', { name: /^Have it/ }).click();
+  await expect(page.getByTestId('check-card')).toContainText(`Toaster ${t}`);
+  await page.getByRole('button', { name: /^Gone/ }).click();
+  await page.getByRole('button', { name: /^Sold/ }).click();
+  await expect(page.getByTestId('check-card')).toContainText(`Shampoo ${t}`);
+  await page.keyboard.press('u');
+  await expect(page.getByText('All checked for this filter')).toBeVisible();
+
+  await page.goto('/history/spending');
+  await expect(page.getByTestId('gone-total')).toBeVisible();
+  await expect(page.locator('.top-list')).toContainText(`Toaster ${t}`);
+  await expect(page.locator('.top-list')).not.toContainText(`Shampoo ${t}`); // used up is not "gone"
+
+  // The sofa is now an item in the inventory.
+  await page.goto('/');
+  await page.getByLabel('Do we have …?').fill(`sofa ${t}`);
+  await expect(page.getByTestId('answer')).toContainText(`Sofa ${t}`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+});

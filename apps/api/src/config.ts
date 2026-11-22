@@ -14,6 +14,8 @@ export interface Config {
   mediaDir: string;
   migrationsDir: string;
   webDir: string | null;
+  /** ECB exchange-rate downloads; FX_SOURCE=off disables them (tests, offline). */
+  fxEnabled?: boolean;
   auth: AuthConfig;
 }
 
@@ -59,6 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mediaDir: resolve(env.MEDIA_DIR ?? '/data/media'),
     migrationsDir: resolve(env.MIGRATIONS_DIR ?? sourceMigrationsDir),
     webDir: env.WEB_DIR ? resolve(env.WEB_DIR) : null,
+    fxEnabled: env.FX_SOURCE !== 'off',
     auth: loadAuthConfig(env),
   };
 }

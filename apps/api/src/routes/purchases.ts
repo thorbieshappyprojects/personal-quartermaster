@@ -144,7 +144,7 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
   await app.register(multipart, { limits: { fileSize: MAX_IMPORT_BYTES, files: 1, fields: 10 } });
   app.addSchema(purchaseLineSchema);
   const pool = () => app.deps.pool;
-  const fxSource = app.deps.fxSource ?? ecbSource;
+  const fxSource = app.deps.fxSource ?? (app.deps.config.fxEnabled === false ? async () => [] : ecbSource);
 
   let fxRefreshing: Promise<number> | null = null;
   const refreshFx = () => {

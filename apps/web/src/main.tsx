@@ -1,6 +1,9 @@
 import { render } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { CategoriesPage } from './pages/Categories';
+import { CheckPage } from './pages/Check';
+import { ImportPage } from './pages/Import';
+import { SpendingPage } from './pages/Spending';
 import { ItemDetailPage } from './pages/ItemDetail';
 import { ItemFormPage } from './pages/ItemForm';
 import { MorePage } from './pages/More';
@@ -21,6 +24,9 @@ function Page() {
   if ((m = match('/places/:id'))) return <PlacesPage key={m.id} id={m.id} />;
   if (pathname() === '/categories') return <CategoriesPage />;
   if (pathname() === '/more') return <MorePage />;
+  if (pathname() === '/history') return <CheckPage />;
+  if (pathname() === '/history/import') return <ImportPage />;
+  if (pathname() === '/history/spending') return <SpendingPage />;
   return (
     <main>
       <h1>Not found</h1>
@@ -51,6 +57,7 @@ function App() {
         <Tab href="/" label="Search" icon="⌕" />
         <Tab href="/items/new" label="Add" icon="＋" />
         <Tab href="/places" label="Places" icon="⌂" />
+        <Tab href="/history" label="History" icon="◷" />
         <Tab href="/more" label="More" icon="≡" />
       </nav>
     </>

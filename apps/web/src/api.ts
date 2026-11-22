@@ -1,4 +1,4 @@
-import type { ItemKind, ItemState, LocationKind } from '@pq/core/browser';
+import type { GoneReason, ItemKind, ItemState, LocationKind, Possession } from '@pq/core/browser';
 
 export interface Me {
   member: { id: string; display_name: string; role: 'owner' | 'member'; email: string };
@@ -75,6 +75,53 @@ export interface EventRow {
   created_at: string;
 }
 
+export interface PurchaseLine {
+  id: string;
+  title: string;
+  quantity: number;
+  amount_minor: number | null;
+  currency: string | null;
+  amount_eur_minor: number | null;
+  url: string | null;
+  item_id: string | null;
+  item_name: string | null;
+  possession: Possession;
+  status: Possession;
+  reason: GoneReason | null;
+  auto_rule: string | null;
+  source: string;
+  merchant: string | null;
+  ordered_at: string | null;
+}
+export interface LinePage {
+  total: number;
+  total_eur_minor: number;
+  lines: PurchaseLine[];
+}
+export interface ImportRun {
+  id: string;
+  source: string;
+  filename: string | null;
+  rows_read: number;
+  purchases_added: number;
+  lines_added: number;
+  lines_existing: number;
+  lines_auto_closed: number;
+  errors: { row: number; message: string }[];
+  created_at: string;
+}
+export type Bucket = 'all' | 'pending' | 'owned' | 'gone' | 'used_up' | 'ignored';
+export interface SpendingReport {
+  totals: Record<Bucket, { count: number; eur_minor: number }>;
+  unconverted: { count: number; currencies: string[] };
+  coverage: number;
+  by_year: ({ year: number | null } & Record<Bucket, number>)[];
+  by_reason: { reason: GoneReason | null; count: number; eur_minor: number }[];
+  by_merchant: { merchant: string | null; count: number; eur_minor: number; gone_eur_minor: number }[];
+  top_gone: PurchaseLine[];
+  fx: { latest_day: string | null; currencies: number };
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -115,6 +162,12 @@ export const api = {
   upload: <T>(path: string, file: Blob, filename: string) => {
     const fd = new FormData();
     fd.append('file', file, filename);
+    return request<T>('POST', path, fd);
+  },
+  uploadForm: <T>(path: string, file: Blob, filename: string, fields: Record<string, string>) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) if (v) fd.append(k, v);
+    fd.append('file', file, filename); // after the fields, so the server sees them first
     return request<T>('POST', path, fd);
   },
 };

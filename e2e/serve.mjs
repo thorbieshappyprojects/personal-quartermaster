@@ -22,6 +22,7 @@ const env = {
   MEDIA_DIR: process.env.E2E_MEDIA_DIR ?? 'test-results/media',
   PORT: '3100',
   LOG_LEVEL: 'warn',
+  FX_SOURCE: 'off', // no network in tests
 };
 spawnSync('mkdir', ['-p', env.MEDIA_DIR]);
 const init = spawnSync('node', ['apps/api/dist/cli.mjs', 'init', '--household', 'Test household', '--email', 'owner@example.test', '--name', 'Test Owner'], { env, stdio: 'inherit' });
