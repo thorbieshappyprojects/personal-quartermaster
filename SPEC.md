@@ -1,6 +1,6 @@
 # Personal Quartermaster: product and architecture spec
 
-Handover for Claude Code. Version 0.1, 22 Nov 2026.
+Handover for Claude Code. Version 0.2, 22 Nov 2026 (0.2: contracts and insurances, milestone M6).
 Repository: `github.com/thorbieshappyprojects/personal-quartermaster` (**public**).
 
 Personal Quartermaster is a self-hosted household inventory with an AI layer. It knows what the household owns, where it is, what it cost and what is running low, and it gets that knowledge with as little manual entry as possible: purchase history imports, receipts by email or photo, quick voice or text notes, and photos of things already in the house.
@@ -27,11 +27,12 @@ Rules for every later session: work one milestone at a time, stop at the "done w
 3. **Declutter.** Find things that are unused and suggest selling, giving away or using them.
 4. **Avoid duplicate purchases.** Answer "do we have X, and where?" in seconds; warn when a receipt shows something already owned.
 5. **Better storage.** Suggest where things should live and what should be stored together.
+6. **Contracts and insurances under control.** Know every running contract and policy, what it costs per month, when it can be cancelled, and whether the household is insured for what it owns.
 
 ### Non-goals (for now)
 
 - Fresh food tracking and recipes. Designed for (section 4, D8) but not built.
-- Accounting, budgeting or bank integration. Spending comes from purchases only.
+- Accounting, budgeting or bank integration. Spending comes from purchases and recorded contracts only; contracts are entered or captured, never read from a bank account.
 - Exact market valuation. Estimates within about ±30 % are enough.
 - A multi-tenant service. One installation serves one household.
 
@@ -50,6 +51,8 @@ Inventory completeness goes **from the top down by value**: expensive durables a
 | **Capture** | Any raw input: photo, text, voice transcript, email, import file. Lands in an inbox and is interpreted into proposed actions. |
 | **Possession check** | Triage of imported purchase lines: still owned (and where), gone, or ignore. |
 | **Stocktake** | Manual inventory mode: walk through one location and confirm, count, add or remove what is there. |
+| **Contract** | Any recurring agreement with a cost or an obligation: insurance policy, subscription, energy, telecom, rental or lease, maintenance, membership. Has a term, a notice period and a recurring cost. |
+| **Notice deadline** | The last day a contract can be cancelled before it renews: end of the current term minus the notice period. |
 | **Nudge** | A proactive suggestion from the Quartermaster (duplicate warning, sell, use up, restock, store together). |
 
 ## 3. Non-negotiables
@@ -81,9 +84,9 @@ Priority: **P0** needed for the tool to be useful, **P1** important, **P2** late
 | A4 | Search and "do we have X?": full-text and fuzzy match over name, aliases, category and tags; the answer gives count, location and last purchase date | P0 | M1 |
 | A5 | Lifecycle states: `owned`, `unknown`, `lent`, `sold`, `given_away`, `disposed`, `lost`, `returned`, `consumed` | P0 | M1 |
 | A6 | "Belongs to": a household member, a dependant (child, pet) or the household | P1 | M1 |
-| A7 | Private flag: an item or purchase visible only to its creator (gifts) | P1 | M7 |
+| A7 | Private flag: an item or purchase visible only to its creator (gifts) | P1 | M8 |
 | A8 | Documents per item: receipt, manual, warranty card | P1 | M3 |
-| A9 | Lending tracker: who has it, since when | P2 | M6 |
+| A9 | Lending tracker: who has it, since when | P2 | M7 |
 
 ### B. Purchase history and spending
 
@@ -111,8 +114,8 @@ Priority: **P0** needed for the tool to be useful, **P1** important, **P2** late
 | C5 | Wardrobe: photos of clothes → items with type, colour, brand and size where visible | P1 | M3 |
 | C6 | Review queue with accept, edit, reject; undo for anything applied automatically | P0 | M3 |
 | C7 | iOS Shortcuts pack: *Add*, *Used*, *Receipt*, *Ask* (section 6.6) | P0 | M3 |
-| C8 | Room walkthrough: a batch of photos of one location → a list of proposed items for that location | P1 | M6 |
-| C9 | Barcode scan with product lookup | P2 | M8 |
+| C8 | Room walkthrough: a batch of photos of one location → a list of proposed items for that location | P1 | M7 |
+| C9 | Barcode scan with product lookup | P2 | M9 |
 
 ### D. Supplies
 
@@ -133,21 +136,21 @@ Priority: **P0** needed for the tool to be useful, **P1** important, **P2** late
 |---|---|---|---|
 | E1 | Duplicate warning in real time when a new receipt contains something already owned or in stock, with the return deadline if known | P0 | M4 |
 | E2 | Weekly digest: new purchases, spend, open review items, low stock, expiring items, three suggestions | P0 | M4 |
-| E3 | Check-ins: periodic short questions ("still using the rowing machine?") that keep usage data current | P1 | M6 |
-| E4 | Sell suggestions for durables unused for a configurable time, ranked by estimated value | P1 | M6 |
-| E5 | "Bought but not used" nudges for purchases with no activity after a configurable time | P1 | M6 |
-| E6 | Storage advisor: items of one category scattered over several locations; things used together stored apart; overfull or empty spots; proposal for a home location | P1 | M6 |
-| E7 | Return window and warranty reminders | P1 | M6 |
+| E3 | Check-ins: periodic short questions ("still using the rowing machine?") that keep usage data current | P1 | M7 |
+| E4 | Sell suggestions for durables unused for a configurable time, ranked by estimated value | P1 | M7 |
+| E5 | "Bought but not used" nudges for purchases with no activity after a configurable time | P1 | M7 |
+| E6 | Storage advisor: items of one category scattered over several locations; things used together stored apart; overfull or empty spots; proposal for a home location | P1 | M7 |
+| E7 | Return window and warranty reminders | P1 | M7 |
 | E8 | Nudge budget: quiet hours, a maximum per week, snooze and "never ask again" per item | P0 | M4 |
 
 ### F. Value and reports
 
 | ID | Feature | Prio | M |
 |---|---|---|---|
-| F1 | Estimated current value from price, age and a depreciation curve per category | P1 | M7 |
-| F2 | Optional market estimate through a pluggable provider (official marketplace API, or model with web search), refreshed quarterly at most | P2 | M7 |
-| F3 | Household contents report: totals per site and category, list of high-value items with receipt and photo, export as PDF and CSV | P1 | M7 |
-| F4 | Sale listing draft: title, description, suggested price, photos | P2 | M7 |
+| F1 | Estimated current value from price, age and a depreciation curve per category | P1 | M8 |
+| F2 | Optional market estimate through a pluggable provider (official marketplace API, or model with web search), refreshed quarterly at most | P2 | M8 |
+| F3 | Household contents report: totals per site and category, list of high-value items with receipt and photo, export as PDF and CSV | P1 | M8 |
+| F4 | Sale listing draft: title, description, suggested price, photos | P2 | M8 |
 
 ### G. Household
 
@@ -155,7 +158,7 @@ Priority: **P0** needed for the tool to be useful, **P1** important, **P2** late
 |---|---|---|---|
 | G1 | Members with roles `owner` and `member`; dependants without a login | P0 | M0 |
 | G2 | Per-member API tokens for Shortcuts and the iOS app; revocable | P0 | M3 |
-| G3 | Activity feed: who added, moved or consumed what | P1 | M7 |
+| G3 | Activity feed: who added, moved or consumed what | P1 | M8 |
 | G4 | Per-member notification settings | P1 | M4 |
 
 ### H. Platform
@@ -165,8 +168,22 @@ Priority: **P0** needed for the tool to be useful, **P1** important, **P2** late
 | H1 | Responsive web app, installable as a PWA, phone first | P0 | M1 |
 | H2 | Notifications: e-mail digest and Web Push; APNs with the native app | P0 | M4 |
 | H3 | Full export of all data and media in open formats | P0 | M1 |
-| H4 | Native iOS app (section 6.7) | P1 | M8 |
+| H4 | Native iOS app (section 6.7) | P1 | M9 |
 | H5 | Home Assistant integration (stock sensors, notify service, NFC tags on shelves) | P2 | later |
+
+### I. Contracts and insurances
+
+| ID | Feature | Prio | M |
+|---|---|---|---|
+| I1 | Contracts of kind `insurance`, `subscription`, `energy`, `telecom`, `rental`, `maintenance`, `membership`, `other`: provider, contract or policy number, holder (person), start, minimum term, renewal period, notice period, end, cost per interval, payment method label, notes, documents | P1 | M6 |
+| I2 | Lifecycle: `active`, `notice_given`, `ended`; giving notice records the date and the confirmed end date; history is kept | P1 | M6 |
+| I3 | Notice-deadline and renewal reminders (default 30 days before the deadline) as nudges and in the weekly digest; price-change reminders when a new cost is entered | P1 | M6 |
+| I4 | Recurring cost overview: monthly and yearly totals by kind, provider and member; next 90 days of renewals and payments; shown next to the spending overview (B7) | P1 | M6 |
+| I5 | Insurance details: coverage type (household contents, liability, legal, device, travel, vehicle, health, life, other), sum insured, deductible, covered persons, sites and items; link items to the policy that covers them | P1 | M6 |
+| I6 | Capture: photo or PDF of a contract, policy or invoice, or a forwarded contract mail → proposed contract with dates, notice period and cost (C1 pipeline, review before applying) | P1 | M6 |
+| I7 | Coverage check: household contents value per site (F1, F3) compared with the sum insured of the contents policy; warns about underinsurance and lists high-value items without receipt or photo | P1 | M8 |
+| I8 | Claims log per insurance: date, incident, affected items, amount claimed and paid, status, documents | P2 | M8 |
+| I9 | "Still worth it?" check-ins for subscriptions and duplicate coverage (for example two device insurances for one phone) | P2 | M7 |
 
 ## 5. Data model
 
@@ -184,12 +201,17 @@ PostgreSQL. All tables carry `id` (UUID), `created_at`, `updated_at`; money is `
 | `stock_lot` | item, quantity, expiry date, location, purchase line |
 | `purchase` | household, source (`amazon_export`, `taobao`, `email`, `photo`, `csv`, `manual`), merchant, external order id, ordered at, total, currency, buyer (member), dedupe key |
 | `purchase_line` | purchase, title (original), title_translated, quantity, unit price, currency, amount in EUR, external product id, url, item link, possession status (`pending`, `owned`, `gone`, `ignored`), return deadline, warranty until |
-| `document` | kind (`receipt`, `manual`, `warranty`, `photo`, `import_file`, `email`), storage key, mime, sha256, links to item / purchase / capture |
+| `document` | kind (`receipt`, `manual`, `warranty`, `photo`, `import_file`, `email`, `contract`, `policy`, `invoice`), storage key, mime, sha256, links to item / purchase / capture / contract / claim |
 | `capture` | member, channel (`web`, `shortcut`, `email`, `import`, `ios`), raw text, documents, status (`new`, `interpreted`, `applied`, `needs_review`, `rejected`, `failed`) |
-| `proposed_action` | capture, type (`create_item`, `update_item`, `move_item`, `consume`, `restock`, `create_purchase`, `link_line`, `set_state`), payload, confidence, status, applied event |
+| `proposed_action` | capture, type (`create_item`, `update_item`, `move_item`, `consume`, `restock`, `create_purchase`, `link_line`, `set_state`, `create_contract`, `update_contract`), payload, confidence, status, applied event |
 | `event` | append-only: household, actor (member or `system`), type, item / purchase refs, before, after, capture ref, undone_by |
 | `valuation` | item, amount in EUR, method (`depreciation`, `market`, `manual`), basis, valued at |
-| `nudge` | type, target refs, payload, status (`open`, `sent`, `accepted`, `dismissed`, `snoozed`), due at |
+| `nudge` | type, target refs (item, purchase or contract), payload, status (`open`, `sent`, `accepted`, `dismissed`, `snoozed`), due at |
+| `contract` | household, kind, provider, contract number, holder (person), state, started at, minimum term (months), renewal period (months), notice period (days or months), ends at, notice given at, cost amount + currency + interval (`month`, `quarter`, `year`, `once`), payment method label, notes, private_to |
+| `contract_cost` | contract, amount, currency, interval, valid from (keeps the price history) |
+| `insurance_detail` | contract (1:1), coverage type, sum insured, deductible, covered persons, covered locations |
+| `contract_item` | contract, item (which items a policy covers, or which device a contract belongs to) |
+| `claim` | contract, occurred at, description, items, amount claimed, amount paid, status, documents |
 | `stocktake` | location, member, started, finished, counts |
 | `fx_rate` | date or year, currency, rate to EUR, source |
 | `ai_call` | purpose, model, input and output tokens, cost in USD, capture ref, duration, outcome |
@@ -204,7 +226,7 @@ iPhone / Mac                         Cloudflare                          VPS: /o
 ┌───────────────┐                ┌──────────────────┐                  ┌───────────────────────────────────┐
 │ Web app (PWA) │──HTTPS────────▶│ Access           │                  │ tunnel (cloudflared, dials out)   │
 │ iOS Shortcuts │  one-time PIN  │  · e-mail allow  │──▶ Tunnel ◀──────│        │                          │
-│ iOS app (M8)  │  or service    │  · service token │                  │        ▼                          │
+│ iOS app (M9)  │  or service    │  · service token │                  │        ▼                          │
 └───────────────┘  token         └──────────────────┘                  │ app  (Node: API + web + jobs)     │
                                                                        │   │            │                  │
  Receipt mailbox ◀── IMAP poll (outbound) ─────────────────────────────│   ▼            ▼                  │
@@ -235,7 +257,7 @@ packages/core/       pure domain logic: actions, rules, dedupe, depreciation, nu
 packages/db/         schema, migrations, queries
 packages/ai/         provider interface, prompts (versioned), schemas, cost ledger
 packages/importers/  amazon-export, taobao, csv, email, each with synthetic fixtures
-ios/                 SwiftUI app (M8)
+ios/                 SwiftUI app (M9)
 shortcuts/           documentation and exported Shortcuts
 deploy/              compose.yml, env.production.example, backup.sh, restore.sh, update.sh
 scripts/             deploy.sh, deploy_verify.sh
@@ -256,14 +278,15 @@ Synchronous exception: the *Ask* and *Used* Shortcuts wait for the result (targe
 
 | Route | Purpose |
 |---|---|
-| `POST /api/v1/capture` | multipart: `text`, `files[]`, `hint` (`receipt`, `item`, `used`, `note`), `location_id`; `wait=true` returns the applied result as plain text |
+| `POST /api/v1/capture` | multipart: `text`, `files[]`, `hint` (`receipt`, `item`, `used`, `note`, `contract`), `location_id`; `wait=true` returns the applied result as plain text |
 | `POST /api/v1/ask` | `{ "q": "do we have AA batteries?" }` → short answer plus matching items |
 | `GET/POST/PATCH /api/v1/items`, `/locations`, `/categories`, `/purchases` | CRUD and bulk move |
 | `POST /api/v1/items/{id}/consume`, `/restock`, `/move`, `/state` | direct actions |
 | `GET /api/v1/review`, `POST /api/v1/review/{id}/accept\|reject` | review queue |
 | `GET /api/v1/possession`, `POST /api/v1/possession/{line}/…` | possession check |
 | `POST /api/v1/imports` | upload an import file, returns a job |
-| `GET /api/v1/reports/spending`, `/contents`, `/coverage` | reports |
+| `GET/POST/PATCH /api/v1/contracts`, `POST /api/v1/contracts/{id}/notice`, `/claims` | contracts, insurances and claims |
+| `GET /api/v1/reports/spending`, `/contents`, `/coverage`, `/recurring` | reports (`/recurring`: contract costs and upcoming deadlines) |
 | `GET /api/v1/shopping-list`, `/nudges`, `/events` | lists and feed |
 | `POST /api/v1/events/{id}/undo` | undo |
 | `GET /api/v1/export` | full export |
@@ -286,10 +309,11 @@ A `DEV_AUTH=1` bypass exists for local development only and refuses to work when
 | **QM Ask** | Dictate Text | `POST /ask`; speaks the answer |
 | **QM Receipt** | Take Photo | `POST /capture` with `hint=receipt` |
 | **QM Add** | Share sheet or camera, optional location menu | `POST /capture` with `hint=item` |
+| **QM Contract** | Share sheet (PDF) or camera | `POST /capture` with `hint=contract` |
 
 Dictation runs on the phone, so the server receives text. Each phone stores one service token and the member's API token inside its Shortcuts.
 
-### 6.7 Native iOS app (M8)
+### 6.7 Native iOS app (M9)
 
 SwiftUI client of the same API, generated from the OpenAPI document. Adds what Shortcuts cannot do well: camera flow with several items per photo, barcode scan, offline capture queue, push notifications, Siri and widgets through App Intents, share extension, stocktake mode with large tap targets. Tokens live in the Keychain. Push notifications and TestFlight need a paid Apple Developer account.
 
@@ -304,7 +328,7 @@ All importers produce purchases and lines only. Items come from the possession c
 
 ### 6.9 AI layer
 
-- One interface, `AiProvider`, with purposes: `classify_capture`, `extract_receipt`, `extract_items_from_photo`, `interpret_note`, `answer_question`, `translate_titles`, `estimate_value`, `write_digest`.
+- One interface, `AiProvider`, with purposes: `classify_capture`, `extract_receipt`, `extract_contract`, `extract_items_from_photo`, `interpret_note`, `answer_question`, `translate_titles`, `estimate_value`, `write_digest`.
 - Models are set per purpose by environment variable, with a small fast model for extraction and a stronger one for reasoning. Check the current model ids in the Anthropic documentation when wiring this up.
 - `answer_question` uses tool calls against read-only search functions instead of receiving inventory data up front.
 - Prompts are files with a version; the version is stored on each `ai_call`.
@@ -382,9 +406,10 @@ The image is built by GitHub Actions and pulled by the server. Nothing is built 
 | **M3 Capture** | C1–C7, A8, G2: inbox, receipt photos, notes, item and clothes photos, review queue, undo, Shortcuts, `ask` with the model | The four Shortcuts work from the lock screen; "QM Used" takes under 10 seconds end to end; every applied action can be undone |
 | **M4 Receipts and nudges** | B9, B10, E1, E2, E8, H2, G4: mailbox polling, dedupe, duplicate warning, weekly digest, Web Push | A forwarded order mail creates one purchase (no duplicate with the export) and, if the item is owned, a push within 5 minutes |
 | **M5 Supplies** | D1–D7: stock, minimums, lots, expiry, shopping list, stocktake, shelf photo | A stocktake of one shelf takes under 2 minutes; the shopping list fills itself |
-| **M6 Advice** | E3–E7, A9, C8: check-ins, sell and use suggestions, storage advisor, reminders, room walkthrough | The digest contains suggestions the owner accepts or dismisses; dismissed ones do not come back |
-| **M7 Value and household** | F1–F4, A7, G3: valuation, contents report, listing drafts, private items, activity feed | The contents report exports as PDF and CSV with totals per site |
-| **M8 iOS app** | H4, C9 | The app covers capture, ask, stocktake and push on the owner's phone |
+| **M6 Contracts and insurances** | I1–I6: contracts, lifecycle, deadline reminders, recurring costs, insurance details, contract capture | Every running contract can be entered or captured from a PDF in under 2 minutes; the digest and a push warn 30 days before each notice deadline; monthly recurring cost is shown per kind |
+| **M7 Advice** | E3–E7, A9, C8, I9: check-ins, sell and use suggestions, storage advisor, reminders, room walkthrough | The digest contains suggestions the owner accepts or dismisses; dismissed ones do not come back |
+| **M8 Value and household** | F1–F4, A7, G3, I7, I8: valuation, contents report, listing drafts, private items, activity feed | The contents report exports as PDF and CSV with totals per site |
+| **M9 iOS app** | H4, C9 | The app covers capture, ask, stocktake and push on the owner's phone |
 | **Later** | D8 fresh food and recipes, H5 Home Assistant | |
 
 ## 9. Open decisions for the owner
@@ -398,8 +423,9 @@ The image is built by GitHub Actions and pulled by the server. Nothing is built 
 7. **Off-server backup target.**
 8. **Interface language** (assumed: English; item names stay as on the receipt, with a translation where needed).
 9. **Licence** of the public repository.
-10. **Apple Developer account** for M8.
+10. **Apple Developer account** for M9.
 11. **"Assume consumed" ages** per supply category and the "unused since" threshold for sell suggestions (assumed: 12 months for supplies, 18 months for durables).
+12. **Contracts:** which kinds to record first, and the default reminder lead time before a notice deadline (assumed: 30 days). Policy and contract numbers are stored in the database like other private data and never appear in fixtures or logs.
 
 ## 10. Risks
 

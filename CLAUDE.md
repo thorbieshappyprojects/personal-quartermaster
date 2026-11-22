@@ -26,7 +26,7 @@ Self-hosted household inventory with an AI layer. Full spec: `SPEC.md` (source o
 
 ## Stack
 
-- TypeScript, Node.js 22, pnpm workspace. Swift/SwiftUI only for `ios/` (M8).
+- TypeScript, Node.js 22, pnpm workspace. Swift/SwiftUI only for `ios/` (M9).
 - API: Fastify with JSON-schema routes; OpenAPI generated from route schemas is the client contract.
 - DB: PostgreSQL 17 + `pg_trgm`; plain SQL migrations applied at start (a failure aborts start). Search = generated `tsvector` + trigram indexes; no vector DB.
 - Jobs: Postgres-backed queue (pg-boss) inside the app process. No Redis.
