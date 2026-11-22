@@ -1,34 +1,59 @@
-import { signal } from '@preact/signals';
 import { render } from 'preact';
-import { api, ApiError, type Me } from './api';
+import { useEffect } from 'preact/hooks';
+import { CategoriesPage } from './pages/Categories';
+import { ItemDetailPage } from './pages/ItemDetail';
+import { ItemFormPage } from './pages/ItemForm';
+import { MorePage } from './pages/More';
+import { PlacesPage } from './pages/Places';
+import { SearchPage } from './pages/Search';
+import { Link, match, pathname, route } from './router';
+import { boot, bootError, me } from './store';
 import './style.css';
 
-const me = signal<Me | null>(null);
-const error = signal<string | null>(null);
-
-api<Me>('/api/v1/me').then(
-  (m) => (me.value = m),
-  (err) => (error.value = err instanceof ApiError && err.status === 403 ? 'You are signed in but not a member of this household.' : 'Could not reach the server.'),
-);
-
-function App() {
+function Page() {
+  void route.value; // re-render on navigation
+  let m: Record<string, string> | null;
+  if (pathname() === '/') return <SearchPage key={route.value} />;
+  if (pathname() === '/items/new') return <ItemFormPage key={route.value} />;
+  if ((m = match('/items/:id/edit'))) return <ItemFormPage key={m.id} id={m.id} />;
+  if ((m = match('/items/:id'))) return <ItemDetailPage key={m.id} id={m.id!} />;
+  if (pathname() === '/places') return <PlacesPage key="root" />;
+  if ((m = match('/places/:id'))) return <PlacesPage key={m.id} id={m.id} />;
+  if (pathname() === '/categories') return <CategoriesPage />;
+  if (pathname() === '/more') return <MorePage />;
   return (
     <main>
-      <header>
-        <h1>Quartermaster</h1>
-        {me.value && <p class="muted" data-testid="household">{me.value.household.name}</p>}
-      </header>
-      {error.value && <p role="alert">{error.value}</p>}
-      {!me.value && !error.value && <p class="muted">Loading…</p>}
-      {me.value && (
-        <section class="card">
-          <p>
-            Signed in as <strong data-testid="member-name">{me.value.member.display_name}</strong> ({me.value.member.role})
-          </p>
-          <p class="muted">Inventory arrives in M1.</p>
-        </section>
-      )}
+      <h1>Not found</h1>
+      <Link href="/">Back to search</Link>
     </main>
+  );
+}
+
+function Tab({ href, label, icon }: { href: string; label: string; icon: string }) {
+  const p = pathname();
+  const active = href === '/' ? p === '/' : p.startsWith(href);
+  return (
+    <Link href={href} class={active ? 'active' : ''} aria-current={active ? 'page' : undefined}>
+      <span aria-hidden="true" class="icon">{icon}</span>
+      <span>{label}</span>
+    </Link>
+  );
+}
+
+function App() {
+  useEffect(() => void boot(), []);
+  if (bootError.value) return <main><h1>Quartermaster</h1><p role="alert" class="error">{bootError.value}</p></main>;
+  if (!me.value) return <main><p class="muted">Loading…</p></main>;
+  return (
+    <>
+      <Page />
+      <nav class="tabs" aria-label="Main">
+        <Tab href="/" label="Search" icon="⌕" />
+        <Tab href="/items/new" label="Add" icon="＋" />
+        <Tab href="/places" label="Places" icon="⌂" />
+        <Tab href="/more" label="More" icon="≡" />
+      </nav>
+    </>
   );
 }
 

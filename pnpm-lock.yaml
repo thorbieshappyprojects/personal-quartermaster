@@ -242,6 +242,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@pq/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@preact/signals':
         specifier: ^2.11.4
         version: 2.11.4(preact@11.2.0)
