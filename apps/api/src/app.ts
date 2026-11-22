@@ -5,6 +5,8 @@ import type { Config } from './config';
 import type { DiskStats } from './health';
 import { registerAuth, type AccessVerifier } from './auth';
 import { healthRoutes } from './routes/health';
+import { memberRoutes } from './routes/members';
+import { DomainError } from '@pq/db';
 
 export interface AppDeps {
   config: Config;
@@ -52,6 +54,10 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
   });
 
   app.setErrorHandler((err: Error & { statusCode?: number; validation?: unknown }, req, reply) => {
+    if (err instanceof DomainError) {
+      const status = { not_found: 404, conflict: 409, last_owner: 409, already_initialised: 409, invalid: 400 }[err.code];
+      return reply.code(status).send({ error: err.code, message: err.message });
+    }
     const status = err.statusCode ?? 500;
     if (status >= 500) {
       req.log.error({ err }, 'request failed');
@@ -62,6 +68,7 @@ export async function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): 
 
   await registerAuth(app, deps.config.auth, deps.accessVerifier);
   await app.register(healthRoutes);
+  await app.register(memberRoutes);
 
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
