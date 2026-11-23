@@ -20,7 +20,7 @@ import { createTestDatabase } from './testing';
 
 const line = (key: string, title: string, amount: number | null, currency = 'EUR', extra: Partial<PurchaseImport['lines'][number]> = {}) => ({
   title, quantity: 1, unitPriceMinor: amount, amountMinor: amount, currency: amount === null ? null : currency,
-  externalProductId: null, url: null, cancelled: false, dedupeKey: key, ...extra,
+  externalProductId: null, url: null, autoClose: null, dedupeKey: key, ...extra,
 });
 
 const purchases: PurchaseImport[] = [
@@ -30,7 +30,7 @@ const purchases: PurchaseImport[] = [
   },
   {
     source: 'csv', merchant: 'Example Shop', externalOrderId: 'A2', orderedAt: '2022-02-02', currency: 'USD', totalMinor: 11000, dedupeKey: 'p2',
-    lines: [line('l4', 'Tent', 11000, 'USD'), line('l5', 'Espresso machine', null, 'EUR', { cancelled: true })],
+    lines: [line('l4', 'Tent', 11000, 'USD'), line('l5', 'Espresso machine', null, 'EUR', { autoClose: { possession: 'ignored', rule: 'cancelled' } })],
   },
 ];
 
@@ -112,5 +112,26 @@ describe('purchases and the possession check', () => {
     expect(r.by_year.map((y) => [y.year, y.gone, y.used_up, y.pending])).toEqual([[2022, 10000, 0, 0], [2019, 15000, 1500, 8500]]);
     expect(r.top_gone.map((l) => l.reason)).toEqual(['sold', 'given_away']);
     expect(r.unconverted.count).toBe(0);
+  });
+
+  it('skips known orders only when they are keyed by a real order number', async () => {
+    const mk = (key: string, orderKeyed: boolean, lineKey: string): PurchaseImport => ({
+      source: 'csv', merchant: null, externalOrderId: null, orderedAt: '2024-01-01', currency: 'EUR', totalMinor: 100, dedupeKey: key, orderKeyed,
+      lines: [line(lineKey, `Thing ${lineKey}`, 100)],
+    });
+    await importPurchases(pool, actor, run, [mk('order-x', true, 'x1'), mk('shopdate-y', false, 'y1')]);
+    const again = await importPurchases(pool, actor, run, [mk('order-x', true, 'x2'), mk('shopdate-y', false, 'y2')], { skipKnownOrders: true });
+    expect(again).toMatchObject({ orders_skipped: 1, lines_added: 1 });
+  });
+
+  it('names an item after the translated title and keeps the original as alias', async () => {
+    await importPurchases(pool, actor, run, [{
+      source: 'taobao', merchant: 'Example', externalOrderId: null, orderedAt: '2024-02-02', currency: 'CNY', totalMinor: 5900, dedupeKey: 'tb1',
+      lines: [{ ...line('tb1-1', '保温杯', 5900, 'CNY'), titleTranslated: 'Thermos cup' }],
+    }]);
+    const l = (await listLines(pool, actor.householdId, actor.memberId, { q: 'thermos' })).lines[0]!;
+    const owned = await decideLine(pool, actor, l.id, { status: 'owned' });
+    const item = await getItem(pool, actor.householdId, actor.memberId, owned.item_id!);
+    expect(item).toMatchObject({ name: 'Thermos cup', aliases: ['保温杯'], price_currency: 'CNY' });
   });
 });

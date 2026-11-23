@@ -14,15 +14,17 @@ export interface PurchaseImport {
   currency: string | null;
   totalMinor: number | null;
   dedupeKey: string;
+  orderKeyed?: boolean;
   lines: {
     title: string;
+    titleTranslated?: string | null;
     quantity: number;
     unitPriceMinor: number | null;
     amountMinor: number | null;
     currency: string | null;
     externalProductId: string | null;
     url: string | null;
-    cancelled: boolean;
+    autoClose: { possession: 'ignored' | 'gone'; rule: string; reason?: GoneReason } | null;
     dedupeKey: string;
   }[];
 }
@@ -46,18 +48,26 @@ export interface ImportRun {
   lines_added: number;
   lines_existing: number;
   lines_auto_closed: number;
+  orders_skipped: number;
   errors: { row: number; message: string }[];
   created_at: Date;
 }
 
-const RUN_COLS = 'id, source, format, filename, rows_read, purchases_added, lines_added, lines_existing, lines_auto_closed, errors, created_at';
+const RUN_COLS = 'id, source, format, filename, rows_read, purchases_added, lines_added, lines_existing, lines_auto_closed, orders_skipped, errors, created_at';
 
 /**
  * Stores parsed purchases. Purchases and lines already present (same dedupe key) are left
  * untouched, so importing the same or an overlapping file again adds only what is new and
- * never resets a decision. Cancelled lines are closed by rule (ignored). One event per run.
+ * never resets a decision. Lines the importer closed by rule (cancelled, not goods: ignored;
+ * returned: gone) skip the check. One event per run.
  */
-export async function importPurchases(pool: Pool, actor: Actor, run: ImportRunInput, purchases: PurchaseImport[]): Promise<ImportRun> {
+export async function importPurchases(
+  pool: Pool,
+  actor: Actor,
+  run: ImportRunInput,
+  purchases: PurchaseImport[],
+  opts: { skipKnownOrders?: boolean } = {},
+): Promise<ImportRun> {
   return tx(pool, async (c) => {
     const r = await c.query<{ id: string }>(
       `INSERT INTO import_run (household_id, member_id, source, format, filename, sha256, rows_read, errors)
@@ -69,6 +79,7 @@ export async function importPurchases(pool: Pool, actor: Actor, run: ImportRunIn
     let linesAdded = 0;
     let linesExisting = 0;
     let autoClosed = 0;
+    let ordersSkipped = 0;
     for (const p of purchases) {
       const ins = await c.query<{ id: string }>(
         `INSERT INTO purchase (household_id, source, merchant, external_order_id, ordered_at, total_amount_minor, currency, buyer_member_id, import_run_id, dedupe_key)
@@ -82,41 +93,63 @@ export async function importPurchases(pool: Pool, actor: Actor, run: ImportRunIn
       }
       if (p.lines.length === 0) continue;
       // All lines of a purchase in one statement.
+      // A purchase that was already there (from this or another file) keeps its lines; with
+      // skipKnownOrders its new lines are not added either, so overlapping exports from
+      // different tools (with differently worded titles) do not double the history.
+      if (!ins.rows[0] && opts.skipKnownOrders && p.orderKeyed) {
+        ordersSkipped++;
+        linesExisting += p.lines.length;
+        continue;
+      }
       const res = await c.query<{ possession: string }>(
-        `INSERT INTO purchase_line (household_id, purchase_id, position, title, quantity, unit_price_minor, amount_minor, currency,
-                                    external_product_id, url, possession, auto_rule, decided_at, dedupe_key)
-         SELECT $1, $2, x.position, x.title, x.quantity, x.unit_price_minor, x.amount_minor, x.currency, x.external_product_id, x.url,
-                CASE WHEN x.cancelled THEN 'ignored' ELSE 'pending' END,
-                CASE WHEN x.cancelled THEN 'cancelled_order' END,
-                CASE WHEN x.cancelled THEN now() END,
+        `INSERT INTO purchase_line (household_id, purchase_id, position, title, title_translated, quantity, unit_price_minor, amount_minor, currency,
+                                    external_product_id, url, possession, gone_reason, auto_rule, decided_at, dedupe_key)
+         SELECT $1, $2, x.position, x.title, x.title_translated, x.quantity, x.unit_price_minor, x.amount_minor, x.currency, x.external_product_id, x.url,
+                coalesce(x.possession, 'pending'), x.gone_reason, x.auto_rule,
+                CASE WHEN x.possession IS NOT NULL THEN now() END,
                 x.dedupe_key
-           FROM unnest($3::int[], $4::text[], $5::numeric[], $6::bigint[], $7::bigint[], $8::text[], $9::text[], $10::text[], $11::bool[], $12::text[])
-                AS x(position, title, quantity, unit_price_minor, amount_minor, currency, external_product_id, url, cancelled, dedupe_key)
+           FROM unnest($3::int[], $4::text[], $5::text[], $6::numeric[], $7::bigint[], $8::bigint[], $9::text[], $10::text[], $11::text[],
+                       $12::text[], $13::text[], $14::text[], $15::text[])
+                AS x(position, title, title_translated, quantity, unit_price_minor, amount_minor, currency, external_product_id, url,
+                     possession, gone_reason, auto_rule, dedupe_key)
          ON CONFLICT (household_id, dedupe_key) DO NOTHING
          RETURNING possession`,
         [
           actor.householdId, purchaseId,
-          p.lines.map((_, i) => i), p.lines.map((l) => l.title), p.lines.map((l) => l.quantity),
+          p.lines.map((_, i) => i), p.lines.map((l) => l.title), p.lines.map((l) => l.titleTranslated ?? null), p.lines.map((l) => l.quantity),
           p.lines.map((l) => l.unitPriceMinor), p.lines.map((l) => l.amountMinor), p.lines.map((l) => l.currency),
-          p.lines.map((l) => l.externalProductId), p.lines.map((l) => l.url), p.lines.map((l) => l.cancelled), p.lines.map((l) => l.dedupeKey),
+          p.lines.map((l) => l.externalProductId), p.lines.map((l) => l.url),
+          p.lines.map((l) => l.autoClose?.possession ?? null), p.lines.map((l) => l.autoClose?.reason ?? null),
+          p.lines.map((l) => l.autoClose?.rule ?? null), p.lines.map((l) => l.dedupeKey),
         ],
       );
       linesAdded += res.rowCount ?? 0;
       linesExisting += p.lines.length - (res.rowCount ?? 0);
-      autoClosed += res.rows.filter((x) => x.possession === 'ignored').length;
+      autoClosed += res.rows.filter((x) => x.possession !== 'pending').length;
     }
     const { rows } = await c.query<ImportRun>(
-      `UPDATE import_run SET purchases_added = $2, lines_added = $3, lines_existing = $4, lines_auto_closed = $5 WHERE id = $1 RETURNING ${RUN_COLS}`,
-      [runId, purchasesAdded, linesAdded, linesExisting, autoClosed],
+      `UPDATE import_run SET purchases_added = $2, lines_added = $3, lines_existing = $4, lines_auto_closed = $5, orders_skipped = $6
+        WHERE id = $1 RETURNING ${RUN_COLS}`,
+      [runId, purchasesAdded, linesAdded, linesExisting, autoClosed, ordersSkipped],
     );
     await writeEvent(c, actor, {
       type: 'import.completed',
       entity: 'import_run',
       entityId: runId,
-      after: { source: run.source, filename: run.filename, purchases_added: purchasesAdded, lines_added: linesAdded, lines_existing: linesExisting, lines_auto_closed: autoClosed },
+      after: { source: run.source, filename: run.filename, purchases_added: purchasesAdded, lines_added: linesAdded, lines_existing: linesExisting, lines_auto_closed: autoClosed, orders_skipped: ordersSkipped },
     });
     return rows[0]!;
   });
+}
+
+/** How many of these purchase keys (only order-number keys are passed) are already in the history. */
+export async function countKnownPurchases(db: Db, householdId: string, keys: string[]): Promise<number> {
+  if (keys.length === 0) return 0;
+  const { rows } = await db.query<{ n: number }>(
+    'SELECT count(*)::int AS n FROM purchase WHERE household_id = $1 AND dedupe_key = ANY($2::text[])',
+    [householdId, keys],
+  );
+  return rows[0]!.n;
 }
 
 export async function listImportRuns(db: Db, householdId: string): Promise<ImportRun[]> {
@@ -263,6 +296,7 @@ export async function lineFacets(db: Db, householdId: string, memberId: string |
 interface LineRow {
   id: string;
   title: string;
+  title_translated: string | null;
   quantity: number;
   amount_minor: number | null;
   currency: string | null;
@@ -276,7 +310,7 @@ interface LineRow {
 
 async function lockLine(c: PoolClient, actor: Actor, id: string): Promise<LineRow> {
   const { rows } = await c.query<LineRow>(
-    `SELECT l.id, l.title, l.quantity, l.amount_minor, l.currency, l.url, l.item_id, l.item_created, l.possession, l.gone_reason, p.ordered_at
+    `SELECT l.id, l.title, l.title_translated, l.quantity, l.amount_minor, l.currency, l.url, l.item_id, l.item_created, l.possession, l.gone_reason, p.ordered_at
        FROM purchase_line l JOIN purchase p ON p.id = l.purchase_id
       WHERE l.household_id = $1 AND (p.private_to IS NULL OR p.private_to = $2) AND l.id = $3
       FOR UPDATE OF l`,
@@ -313,7 +347,8 @@ export async function decideLine(pool: Pool, actor: Actor, id: string, d: Decisi
     let itemId = cur.item_id;
     let created = cur.item_created;
     if (d.status === 'owned' && !itemId) {
-      const name = d.name?.trim() || shortItemName(cur.title);
+      const readable = cur.title_translated ?? cur.title;
+      const name = d.name?.trim() || shortItemName(readable);
       const item = await insertItem(c, actor, {
         kind: d.kind ?? 'durable',
         name,
@@ -323,7 +358,8 @@ export async function decideLine(pool: Pool, actor: Actor, id: string, d: Decisi
         priceCurrency: cur.amount_minor != null ? cur.currency : null,
         purchaseUrl: cur.url,
         acquiredAt: cur.ordered_at,
-        notes: name !== cur.title ? `Bought as: ${cur.title}` : null,
+        aliases: cur.title_translated ? [shortItemName(cur.title, 200)] : [],
+        notes: name !== cur.title ? `Bought as: ${cur.title}${cur.title_translated && name !== cur.title_translated ? `\n(${cur.title_translated})` : ''}` : null,
       });
       itemId = item.id;
       created = true;

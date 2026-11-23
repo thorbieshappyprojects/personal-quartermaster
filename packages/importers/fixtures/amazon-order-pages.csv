@@ -1,0 +1,5 @@
+order_id,order_date,order_year,order_type,item_no_in_order,items_in_order,order_total,currency,recipient,shipping_address,payment_method,shipment_status,item_title,asin,product_url,quantity,unit_price,seller
+302-1111111-0000001,2015-04-02,2015,physical,1,2,64.98,EUR,Test Person,"Test Person; Teststr. 1; 00000 Teststadt",Visa 0000,Zugestellt: 3. April,Bread knife,B00TESTA01,https://www.amazon.de/dp/B00TESTA01,1,49.99,Amazon.de
+302-1111111-0000001,2015-04-02,2015,physical,2,2,64.98,EUR,Test Person,"Test Person; Teststr. 1; 00000 Teststadt",Visa 0000,Rücksendung abgeschlossen,Cutting board,B00TESTA02,https://www.amazon.de/dp/B00TESTA02,1,14.99,Example Seller
+D01-2222222-0000002,2016-05-03,2016,digital,1,1,9.99,EUR,,,Visa 0000,,Some e-book,B0TESTEBK1,https://www.amazon.de/dp/B0TESTEBK1,1,9.99,
+302-3333333-0000003,2017-06-04,2017,physical,1,1,,EUR,Test Person,,Visa 0000,Storniert,Kettle,B00TESTA03,https://www.amazon.de/dp/B00TESTA03,1,29.99,Amazon.de

@@ -1,0 +1,5 @@
+"order_date","order_no","shop","status_cn","status_en","item_no","items_in_order","item_title_cn","item_title_en","variant_cn","variant_en","unit_price_cny","list_price_cny","quantity","order_amount_cny","order_amount_type","shipping_cny","import_tax_cny","note"
+"2019-08-01","1000000000000000001","示例店铺","交易成功","Completed","1","2","保温杯","Thermos cup","颜色分类:黑色","Colour: black","59.00","","2","128.00","Amount paid","10.00","",""
+"2019-08-01","1000000000000000001","示例店铺","交易成功","Completed","2","2","杯刷","Cup brush","","","10.00","","1","128.00","Amount paid","10.00","",""
+"2020-01-15","1000000000000000002","示例店铺二","交易关闭","Closed (cancelled or refunded)","1","1","耳机","Headphones","","","199.00","","1","199.00","Order total","0.00","",""
+"2021-03-03","1000000000000000003","话费充值","充值成功","Top-up successful","1","1","话费","Phone credit","","","50.00","","1","50.00","Amount paid","0.00","",""

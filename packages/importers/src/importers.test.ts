@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { decodeText, detectDateOrder, guessMapping, parseCsv, parseDate, parseMoney, parseOrders } from './index';
+import { autoCloseFor, decodeText, detectDateOrder, guessMapping, parseCsv, parseDate, parseMoney, parseOrders } from './index';
 
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8');
 
@@ -65,7 +65,7 @@ describe('Amazon order history', () => {
       url: 'https://www.amazon.de/dp/B000TEST01',
     });
     expect(first!.lines[1]).toMatchObject({ quantity: 2, unitPriceMinor: 949, amountMinor: 1898 });
-    expect(cancelled!.lines[0]).toMatchObject({ cancelled: true, amountMinor: null });
+    expect(cancelled!.lines[0]).toMatchObject({ autoClose: { possession: 'ignored', rule: 'cancelled' }, amountMinor: null });
     expect(us!.lines[0]).toMatchObject({ currency: 'USD', amountMinor: 2450 });
   });
 
@@ -107,5 +107,55 @@ describe('generic CSV', () => {
     expect(guessMapping(['Order Date', 'Title', 'ASIN/ISBN', 'Purchase Price Per Unit', 'Item Total'])).toMatchObject({
       title: 'Title', product_id: 'ASIN/ISBN', unit_price: 'Purchase Price Per Unit', amount: 'Item Total',
     });
+  });
+});
+
+describe('known layouts and closing rules', () => {
+  it('reads Amazon order-page lists: digital, returned and cancelled lines close themselves', () => {
+    const r = parseOrders(fixture('amazon-order-pages.csv'));
+    expect(r.format).toBe('amazon_order_pages');
+    expect(r.mapping.merchant).toBeUndefined(); // the marketplace seller is not the shop
+    const lines = r.purchases.flatMap((p) => p.lines);
+    expect(lines.map((l) => [l.title, l.amountMinor, l.autoClose?.rule ?? null])).toEqual([
+      ['Bread knife', 4999, null],
+      ['Cutting board', 1499, 'returned'],
+      ['Some e-book', 999, 'not_goods'],
+      ['Kettle', 2999, 'cancelled'],
+    ]);
+    expect(lines[1]!.autoClose).toEqual({ possession: 'gone', reason: 'returned', rule: 'returned' });
+    expect(r.purchases[0]!.merchant).toBe('Amazon');
+    expect(JSON.stringify(r.purchases)).not.toMatch(/Teststr|Visa|Test Person/);
+  });
+
+  it('reads Taobao lists: original title, English with variant, CNY from the header', () => {
+    const r = parseOrders(fixture('taobao-orders.csv'));
+    expect(r.format).toBe('taobao_orders');
+    expect(r.source).toBe('taobao');
+    const [cup, brush] = r.purchases[0]!.lines;
+    expect(cup).toMatchObject({ title: '保温杯 · Colour: black', titleTranslated: 'Thermos cup · Colour: black', currency: 'CNY', quantity: 2, amountMinor: 11800 });
+    expect(brush!.titleTranslated).toBe('Cup brush');
+    expect(r.purchases[1]!.lines[0]!.autoClose?.rule).toBe('cancelled');
+    expect(r.purchases[2]!.lines[0]!.autoClose?.rule).toBe('not_goods');
+  });
+
+  it('closes only on clear statuses', () => {
+    expect(autoCloseFor('Delivered / invoiced (01.02.2025); partial refund processed', '')).toBeNull();
+    expect(autoCloseFor('Partial delivery shipped; undeliverable items cancelled', '')).toBeNull();
+    expect(autoCloseFor('Delivered; refunded (03.02.2025)', '')?.rule).toBe('returned');
+    expect(autoCloseFor('refunded (credit note)', '')?.rule).toBe('returned');
+    expect(autoCloseFor('Erstattet', '')?.rule).toBe('returned');
+    expect(autoCloseFor('cancelled', '')?.rule).toBe('cancelled');
+    expect(autoCloseFor('paid', 'app store')?.rule).toBe('not_goods');
+    expect(autoCloseFor('paid', 'paypal money sent')?.rule).toBe('not_goods');
+    expect(autoCloseFor('paid', 'paypal receipt')).toBeNull();
+    expect(autoCloseFor('paid', 'shop')).toBeNull();
+  });
+
+  it('gives the same order the same key in different files and layouts', () => {
+    const a = parseOrders('order_number,item,shop,unit_price,currency\nD01-2222222-0000002,E-book (mail),Example Books,9.99,EUR');
+    const b = parseOrders(fixture('amazon-order-pages.csv'));
+    expect(b.purchases.map((p) => p.dedupeKey)).toContain(a.purchases[0]!.dedupeKey);
+    const short = parseOrders('order_number,item,shop\n123,Thing,Shop A\n123,Thing,Shop B');
+    expect(short.purchases).toHaveLength(2); // short numbers are not trusted across shops
   });
 });
