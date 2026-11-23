@@ -10,3 +10,6 @@ deploy.env
 playwright-report/
 test-results/
 blob-report/
+
+# Private order exports (never commit)
+export/
