@@ -197,3 +197,33 @@ table { border-collapse: collapse; width: 100%; }
 .seg:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 .top-list { padding-left: 1.4rem; margin: 0.4rem 0; display: grid; gap: 0.45rem; }
 .top-title { font-weight: 600; overflow-wrap: anywhere; }
+
+/* import wizard and review list */
+.steps { list-style: none; counter-reset: step; display: flex; gap: 0.4rem; padding: 0; margin: 0.4rem 0 1rem; font-size: 0.85rem; color: var(--muted); }
+.steps li { counter-increment: step; flex: 1; padding: 0.35rem 0.5rem; border-radius: 8px; border: 1px solid var(--line); }
+.steps li::before { content: counter(step) '. '; font-weight: 700; }
+.steps li.current { border-color: var(--accent); color: var(--fg); font-weight: 600; }
+.steps li.done { color: var(--fg); }
+.file-card { background: var(--card); border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius); padding: 0.75rem; margin: 0.75rem 0; }
+.file-card.ok { border-left-color: var(--accent); }
+.file-card.attention, .file-card.error { border-left-color: var(--danger); }
+.file-card header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; }
+.file-name { overflow-wrap: anywhere; flex: 1 1 12rem; }
+.pill { font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.55rem; border-radius: 99px; background: var(--line); }
+.pill-ok { background: var(--accent); color: var(--accent-fg); }
+.pill-attention, .pill-error { background: var(--danger); color: #fff; }
+.facts-list { margin: 0.3rem 0 0.5rem; padding-left: 1.1rem; font-size: 0.92rem; display: grid; gap: 0.15rem; }
+.file-card details { margin: 0.35rem 0; }
+.file-card summary { cursor: pointer; color: var(--accent); font-size: 0.92rem; }
+.check-option { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.8rem 0; font-size: 0.92rem; }
+.check-option input { margin-top: 0.25rem; }
+.sticky-action { position: sticky; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom)); background: var(--bg); padding: 0.4rem 0 0.6rem; display: grid; gap: 0.2rem; justify-items: center; }
+.sticky-action .wide { margin-top: 0; }
+.next-steps { padding-left: 1.3rem; display: grid; gap: 0.6rem; line-height: 1.45; }
+.earlier { margin-top: 1.5rem; }
+.original-title { margin: 0 0 0.3rem; overflow-wrap: anywhere; }
+.review-list { list-style: none; padding: 0; margin: 0.6rem 0; display: grid; gap: 0.4rem; }
+.review-list li { display: flex; gap: 0.6rem; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.55rem 0.7rem; }
+.review-list li > div { min-width: 0; }
+.review-list li.done { opacity: 0.55; }
+.small-btn { min-height: 2.3rem; padding: 0.3rem 0.8rem; flex: 0 0 auto; }

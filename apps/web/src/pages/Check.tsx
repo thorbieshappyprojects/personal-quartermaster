@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { api, qs, type LinePage, type PurchaseLine } from '../api';
 import { LocationPicker } from '../components/LocationPicker';
 import { Empty, ErrorNote, Path } from '../components/ui';
-import { Link } from '../router';
+import { Link, query } from '../router';
 import { locationPath } from '../store';
 import { eur, GONE_CHOICES, HistoryNav, lineDate, linePrice, REASON_LABELS } from './history-common';
 
@@ -45,6 +45,12 @@ const ACTION_LABEL: Record<Action, string> = { owned: 'Have it', gone: 'Gone', u
  * decides it and the next one appears at once; requests run in order in the background.
  */
 export function CheckPage() {
+  const status = query('status');
+  if (status === 'ignored' || status === 'gone' || status === 'owned') return <ReviewList status={status} />;
+  return <CheckQueue />;
+}
+
+function CheckQueue() {
   const queue = useSignal<PurchaseLine[]>([]);
   const total = useSignal<number | null>(null);
   const totalEur = useSignal(0);
@@ -231,7 +237,8 @@ export function CheckPage() {
         <>
           <article class="check-card" data-testid="check-card" aria-live="polite">
             <div class="check-price">{linePrice(current)}</div>
-            <h2 class="check-title">{current.title}</h2>
+            <h2 class="check-title">{current.title_translated ?? current.title}</h2>
+            {current.title_translated && <p class="muted small original-title" lang="zh">{current.title}</p>}
             <p class="muted small">
               {current.merchant ?? 'Unknown shop'} · {lineDate(current.ordered_at)}
               {current.quantity !== 1 && <> · {current.quantity} ×</>}
@@ -379,5 +386,76 @@ function BulkMark({ filters, onDone }: { filters: Filters; onDone: () => void })
       <ErrorNote error={error.value} />
       {result.value && <p class="small" role="status">{result.value}</p>}
     </div>
+  );
+}
+
+const AUTO_RULES: Record<string, string> = { cancelled: 'cancelled order', not_goods: 'not goods', returned: 'returned', cancelled_order: 'cancelled order' };
+const STATUS_TITLES = { ignored: 'Ignored lines', gone: 'Gone and returned', owned: 'Things you have' } as const;
+
+/** Decided lines (e.g. closed automatically on import), with "put back" to send one back to the check. */
+function ReviewList({ status }: { status: 'ignored' | 'gone' | 'owned' }) {
+  const page = useSignal<LinePage | null>(null);
+  const q = useSignal('');
+  const error = useSignal<string | null>(null);
+  const putBack = useSignal<Set<string>>(new Set());
+  const offset = useSignal(0);
+
+  const load = (more = false) =>
+    api.get<LinePage>(`/api/v1/possession${qs({ status, q: q.value, sort: 'price', limit: 100, offset: more ? offset.value : 0 })}`).then(
+      (p) => {
+        page.value = more && page.value ? { ...p, lines: [...page.value.lines, ...p.lines] } : p;
+        offset.value = (more ? offset.value : 0) + p.lines.length;
+      },
+      (e: Error) => (error.value = e.message),
+    );
+  useEffect(() => void load(), []);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  async function reset(l: PurchaseLine) {
+    error.value = null;
+    try {
+      await api.post(`/api/v1/possession/${l.id}/reset`);
+      putBack.value = new Set([...putBack.value, l.id]);
+    } catch (e) {
+      error.value = (e as Error).message;
+    }
+  }
+
+  const p = page.value;
+  return (
+    <main>
+      <HistoryNav />
+      <h1>{STATUS_TITLES[status]}</h1>
+      <p class="muted small">
+        {p ? `${p.total.toLocaleString('en-GB')} lines · ${eur(p.total_eur_minor)}` : 'Loading…'}. "Put back" returns a line to the check
+        {status === 'owned' ? ' and removes the item made from it, as long as you have not changed that item' : ''}.{' '}
+        <Link href="/history">Back to checking</Link>
+      </p>
+      <input type="search" placeholder="Search titles" aria-label="Search titles" value={q.value}
+        onInput={(e) => { q.value = (e.target as HTMLInputElement).value; clearTimeout(timer.current); timer.current = setTimeout(() => void load(), 300); }} />
+      <ErrorNote error={error.value} />
+      <ul class="review-list">
+        {p?.lines.map((l) => (
+          <li key={l.id} class={putBack.value.has(l.id) ? 'done' : ''}>
+            <div>
+              <div class="top-title">{l.title_translated ?? l.title}</div>
+              <div class="muted small">
+                {linePrice(l)} · {l.merchant ?? 'unknown shop'} · {lineDate(l.ordered_at)}
+                {l.reason && <> · {REASON_LABELS[l.reason].toLowerCase()}</>}
+                {l.auto_rule && <> · <span class="badge">auto: {AUTO_RULES[l.auto_rule] ?? l.auto_rule}</span></>}
+              </div>
+            </div>
+            {putBack.value.has(l.id) ? (
+              <span class="small muted">back in the check</span>
+            ) : l.possession === l.status ? (
+              <button class="secondary small-btn" onClick={() => void reset(l)}>Put back</button>
+            ) : (
+              <Link href={`/items/${l.item_id}`}>item</Link>
+            )}
+          </li>
+        ))}
+      </ul>
+      {p && p.lines.length < p.total && <button class="secondary wide" onClick={() => void load(true)}>Show more</button>}
+    </main>
   );
 }

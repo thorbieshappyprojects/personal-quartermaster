@@ -78,6 +78,7 @@ export interface EventRow {
 export interface PurchaseLine {
   id: string;
   title: string;
+  title_translated: string | null;
   quantity: number;
   amount_minor: number | null;
   currency: string | null;
@@ -107,6 +108,7 @@ export interface ImportRun {
   lines_added: number;
   lines_existing: number;
   lines_auto_closed: number;
+  orders_skipped: number;
   errors: { row: number; message: string }[];
   created_at: string;
 }

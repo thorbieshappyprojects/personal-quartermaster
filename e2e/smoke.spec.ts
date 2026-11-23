@@ -59,8 +59,18 @@ test('M2: import orders, check them quickly, see what was spent on things gone',
   const csv = `Date,Title,Price,Currency\n2020-05-01,Sofa ${t},499.00,EUR\n2021-02-01,Toaster ${t},29.99,EUR\n2022-03-01,Shampoo ${t},4.50,EUR\n`;
 
   await page.goto('/history/import');
-  await page.getByTestId('import-file').setInputFiles({ name: `orders-${t}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) });
-  await expect(page.getByTestId('import-summary')).toContainText('3 lines');
+  // Two files at once: one with known columns, one that needs the title column picked.
+  await page.getByTestId('import-file').setInputFiles([
+    { name: `orders-${t}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) },
+    { name: `odd-${t}.csv`, mimeType: 'text/csv', buffer: Buffer.from(`when,thing,cost,cur\n2023-01-01,App ${t},1.00,EUR\n`) },
+  ]);
+  const cards = page.getByTestId('file-card');
+  await expect(cards.nth(0)).toContainText('Ready');
+  await expect(cards.nth(0)).toContainText('3 to check');
+  await expect(cards.nth(1)).toContainText('Pick the title column');
+  await cards.nth(1).getByLabel('Product title *').selectOption('thing');
+  await expect(cards.nth(1)).toContainText('Ready');
+  await cards.nth(1).getByRole('button', { name: /leave out/i }).click();
   await page.getByTestId('import-go').click();
   await expect(page.getByTestId('import-result')).toContainText('3 new lines');
   await page.getByRole('link', { name: 'Start checking' }).click();

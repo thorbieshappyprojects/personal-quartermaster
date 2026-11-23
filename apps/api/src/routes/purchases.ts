@@ -2,6 +2,7 @@ import multipart from '@fastify/multipart';
 import { GONE_REASONS, isCurrencyCode, type GoneReason, type ItemKind } from '@pq/core';
 import {
   bulkDecide,
+  countKnownPurchases,
   decideLine,
   fxStatus,
   importPurchases,
@@ -51,7 +52,7 @@ const runSchema = {
   type: 'object',
   properties: {
     id: uuid, source: str, format: str, filename: nstr, rows_read: { type: 'integer' }, purchases_added: { type: 'integer' },
-    lines_added: { type: 'integer' }, lines_existing: { type: 'integer' }, lines_auto_closed: { type: 'integer' },
+    lines_added: { type: 'integer' }, lines_existing: { type: 'integer' }, lines_auto_closed: { type: 'integer' }, orders_skipped: { type: 'integer' },
     errors: { type: 'array', items: { type: 'object', properties: { row: { type: 'integer' }, message: str }, required: ['row', 'message'] } },
     created_at: timestamp,
   },
@@ -164,7 +165,7 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── imports ──
-  const uploadDoc = 'multipart: "file" (CSV, or a zip such as Amazon\'s data export) plus optional fields mapping (JSON {field: header}), default_currency, default_merchant, date_order (dmy|mdy)';
+  const uploadDoc = 'multipart: "file" (CSV, or a zip such as Amazon\'s data export) plus optional fields mapping (JSON {field: header}), default_currency, default_merchant, date_order (dmy|mdy), skip_known_orders (1|0, default 1)';
 
   app.post('/api/v1/imports/preview', {
     schema: { summary: 'Read an order file without saving: detected format, column mapping, first lines, problems', description: uploadDoc, tags: ['imports'], consumes: ['multipart/form-data'] },
@@ -173,13 +174,29 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
     if (!up) return reply;
     const files = await readImportFiles(up.buf, up.filename);
     const r = parseImportFiles(files, parseOptionsFrom(up.fields));
+    const lines = r.purchases.flatMap((p) => p.lines.map((l) => ({ p, l })));
+    const toCheck = lines.filter(({ l }) => !l.autoClose);
+    const closed = { cancelled: 0, not_goods: 0, returned: 0 };
+    for (const { l } of lines) if (l.autoClose) closed[l.autoClose.rule]++;
+    const spend = new Map<string, number>();
+    for (const { l } of toCheck) if (l.amountMinor != null && l.currency) spend.set(l.currency, (spend.get(l.currency) ?? 0) + l.amountMinor);
+    const years = r.purchases.map((p) => p.orderedAt?.slice(0, 4)).filter((y): y is string => !!y).sort();
+    const keys = [...new Set(r.purchases.map((p) => p.dedupeKey))];
+    const known = await countKnownPurchases(pool(), actorOf(req).householdId, [...new Set(r.purchases.filter((p) => p.orderKeyed).map((p) => p.dedupeKey))]);
+    const pick = (xs: typeof lines) => xs.slice(0, 8).map(({ p, l }) => ({
+      title: l.title, title_translated: l.titleTranslated, ordered_at: p.orderedAt, merchant: p.merchant, quantity: l.quantity,
+      amount_minor: l.amountMinor, currency: l.currency, auto_close: l.autoClose?.rule ?? null,
+    }));
     return {
       format: r.format, source: r.source, files: r.files, headers: r.headers, mapping: r.mapping,
-      row_count: r.rowCount, purchase_count: r.purchases.length, line_count: r.lineCount,
-      currencies: [...new Set(r.purchases.flatMap((p) => p.lines.map((l) => l.currency)).filter(Boolean))],
-      sample: r.purchases.flatMap((p) => p.lines.map((l) => ({
-        title: l.title, ordered_at: p.orderedAt, merchant: p.merchant, quantity: l.quantity, amount_minor: l.amountMinor, currency: l.currency, cancelled: l.cancelled,
-      }))).slice(0, 8),
+      row_count: r.rowCount, purchase_count: keys.length, line_count: r.lineCount,
+      to_check: toCheck.length, auto_closed: closed, known_orders: known,
+      spend_to_check: [...spend].map(([currency, amount_minor]) => ({ currency, amount_minor })).sort((x, y) => y.amount_minor - x.amount_minor),
+      years: years.length ? [Number(years[0]), Number(years[years.length - 1])] : null,
+      currencies: [...new Set(lines.map(({ l }) => l.currency).filter(Boolean))],
+      no_price: toCheck.filter(({ l }) => l.amountMinor == null).length,
+      sample: pick(toCheck),
+      sample_closed: pick(lines.filter(({ l }) => l.autoClose)),
       errors: r.errors.slice(0, 50), error_count: r.errors.length,
     };
   });
@@ -198,7 +215,7 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
     if (!r.mapping.title) throw new ImportFileError('no column for the product title; map one');
     const run = await importPurchases(pool(), actorOf(req), {
       source: r.source, format: r.format, filename: up.filename.slice(0, 300), sha256: sha256(up.buf), rowsRead: r.rowCount, errors: r.errors,
-    }, r.purchases);
+    }, r.purchases, { skipKnownOrders: up.fields.skip_known_orders !== '0' });
     // Foreign currencies need reference rates; fetch them in the background when missing or stale.
     if (r.purchases.some((p) => p.lines.some((l) => l.currency && l.currency !== 'EUR'))) {
       const s = await fxStatus(pool());
