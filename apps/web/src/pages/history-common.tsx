@@ -36,6 +36,7 @@ export function HistoryNav() {
   return (
     <nav class="subnav" aria-label="Purchase history">
       {tab('/history', 'Check')}
+      {tab('/history/consumables', 'Consumables')}
       {tab('/history/spending', 'Spending')}
       {tab('/history/import', 'Import')}
     </nav>

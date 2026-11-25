@@ -227,3 +227,15 @@ table { border-collapse: collapse; width: 100%; }
 .review-list li > div { min-width: 0; }
 .review-list li.done { opacity: 0.55; }
 .small-btn { min-height: 2.3rem; padding: 0.3rem 0.8rem; flex: 0 0 auto; }
+
+/* likely consumables */
+.subnav { flex-wrap: wrap; }
+.bulk-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 0.4rem 0; }
+.bulk-bar .check-option { margin: 0; flex: 1 1 100%; }
+.bulk-bar button { flex: 1 1 12rem; }
+.consumable-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.4rem; }
+.consumable-list li { display: flex; gap: 0.6rem; align-items: flex-start; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.55rem 0.7rem; }
+.consumable-list li.done { opacity: 0.55; }
+.consumable-list input[type='checkbox'] { margin-top: 0.3rem; width: 1.15rem; height: 1.15rem; }
+.c-text { flex: 1 1 14rem; min-width: 0; }
+.c-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }

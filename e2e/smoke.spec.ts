@@ -98,3 +98,25 @@ test('M2: import orders, check them quickly, see what was spent on things gone',
   await expect(page.getByTestId('answer')).toContainText(`Sofa ${t}`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
 });
+
+test('M2: likely consumables from 2025 on, one by one and selected', async ({ page }) => {
+  const t = tag(page);
+  const csv = `Date,Title,Price,Currency,Shop\n2025-06-01,Espresso beans ${t},18.00,EUR,Example Roastery\n2025-06-02,Toothpaste ${t},3.00,EUR,Example Drugstore\n2025-06-03,Green tea ${t},9.00,EUR,Example Tea\n2025-06-04,Desk lamp ${t},40.00,EUR,Example Home\n`;
+  await page.goto('/history/import');
+  await page.getByTestId('import-file').setInputFiles({ name: `c-${t}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await page.getByTestId('import-go').click();
+  await expect(page.getByTestId('import-result')).toContainText('4 new lines');
+
+  await page.goto('/history/consumables');
+  const row = (name: string) => page.getByTestId('consumable-row').filter({ hasText: `${name} ${t}` });
+  await expect(row('Espresso beans')).toBeVisible();
+  await expect(row('Desk lamp')).toHaveCount(0); // not a consumable
+  await row('Espresso beans').getByRole('button', { name: 'Used up' }).click();
+  await expect(row('Espresso beans')).toContainText('used up');
+  await row('Toothpaste').getByRole('button', { name: 'not a consumable' }).click();
+  await expect(row('Toothpaste')).toContainText('back in the check');
+  await row('Green tea').getByRole('checkbox').check();
+  await page.getByRole('button', { name: /Mark 1 selected as used up/ }).click();
+  await expect(row('Green tea')).toContainText('used up');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+});

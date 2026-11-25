@@ -7,7 +7,9 @@ import {
   initHousehold,
   listLines,
   migrate,
+  refreshSuggestions,
   resetLine,
+  setSuggestionRejected,
   sourceMigrationsDir,
   spendingReport,
   updateItem,
@@ -133,5 +135,22 @@ describe('purchases and the possession check', () => {
     const owned = await decideLine(pool, actor, l.id, { status: 'owned' });
     const item = await getItem(pool, actor.householdId, actor.memberId, owned.item_id!);
     expect(item).toMatchObject({ name: 'Thermos cup', aliases: ['保温杯'], price_currency: 'CNY' });
+  });
+
+  it('suggests consumables, filters by them and by date, and accepts "not a consumable"', async () => {
+    await importPurchases(pool, actor, run, [{
+      source: 'csv', merchant: 'Example Shop', externalOrderId: 'S-2025-1', orderedAt: '2025-03-01', currency: 'EUR', totalMinor: 3000, dedupeKey: 's25',
+      lines: [line('s25-1', 'Kaffeebohnen 1 kg', 1500), line('s25-2', 'Kaffeemühle elektrisch', 1500), line('s25-3', 'Shampoo 400ml', 300)],
+    }]);
+    expect(await refreshSuggestions(pool, actor.householdId)).toBeGreaterThan(0);
+    expect(await refreshSuggestions(pool, actor.householdId)).toBe(0); // up to date
+    const q = (f = {}) => listLines(pool, actor.householdId, actor.memberId, { suggested: 'consumable', fromDate: '2025-01-01', ...f });
+    const page = await q();
+    expect(page.lines.map((l) => [l.title, l.suggested_kind])).toEqual([['Kaffeebohnen 1 kg', 'food'], ['Shampoo 400ml', 'supplies']]);
+    await setSuggestionRejected(pool, actor, page.lines[1]!.id, true);
+    expect((await q()).total).toBe(1);
+    const n = await bulkDecide(pool, actor, { ids: [page.lines[0]!.id] }, { status: 'gone', goneReason: 'consumed' });
+    expect(n).toBe(1);
+    expect((await q()).total).toBe(0);
   });
 });

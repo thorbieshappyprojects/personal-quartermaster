@@ -1,4 +1,14 @@
-import { GONE, normaliseText, shortItemName, type GoneReason, type ItemKind, type Possession } from '@pq/core';
+import {
+  CONSUMABLE_RULES_VERSION,
+  classifyConsumable,
+  GONE,
+  normaliseText,
+  shortItemName,
+  type ConsumableKind,
+  type GoneReason,
+  type ItemKind,
+  type Possession,
+} from '@pq/core';
 import type { Pool, PoolClient } from 'pg';
 import { insertItem, itemSnapshot, type ItemRow } from './items';
 import { DomainError, tx, writeEvent, type Actor, type Db } from './util';
@@ -168,7 +178,7 @@ export async function listImportRuns(db: Db, householdId: string): Promise<Impor
 const LINE_VIEW = `
   SELECT l.id, l.purchase_id, l.position, l.title, l.title_translated, l.quantity, l.unit_price_minor, l.amount_minor, l.currency,
          l.external_product_id, l.url, l.item_id, l.item_created, l.auto_rule, l.decided_at, l.search_text,
-         l.possession, l.gone_reason,
+         l.possession, l.gone_reason, l.suggested_kind, l.suggestion_rejected,
          p.source, p.merchant, p.external_order_id, p.ordered_at,
          i.state AS item_state, i.name AS item_name,
          CASE WHEN i.state = ANY('{${GONE.join(',')}}') THEN 'gone' ELSE l.possession END AS status,
@@ -209,6 +219,8 @@ export interface LineView {
   reason: GoneReason | null;   // effective
   auto_rule: string | null;
   decided_at: Date | null;
+  suggested_kind: ConsumableKind | null;
+  suggestion_rejected: boolean;
   source: string;
   merchant: string | null;
   external_order_id: string | null;
@@ -217,7 +229,7 @@ export interface LineView {
 
 const VIEW_COLS = `id, purchase_id, title, title_translated, quantity, unit_price_minor, amount_minor, currency, amount_eur_minor,
   external_product_id, url, item_id, item_name, item_created, possession, gone_reason, status, reason, auto_rule, decided_at,
-  source, merchant, external_order_id, ordered_at`;
+  suggested_kind, suggestion_rejected, source, merchant, external_order_id, ordered_at`;
 
 export interface LineFilter {
   status?: Possession | 'all';
@@ -227,6 +239,10 @@ export interface LineFilter {
   source?: string;
   minEur?: number; // minor units
   maxEur?: number;
+  fromDate?: string; // ordered on or after (YYYY-MM-DD)
+  toDate?: string;   // ordered before
+  suggested?: 'consumable' | 'food' | 'supplies';
+  ids?: string[];
   sort?: 'price' | 'date' | 'date_asc';
   limit?: number;
   offset?: number;
@@ -244,6 +260,11 @@ function where(f: LineFilter, params: unknown[]): string {
   if (f.source) w.push(`v.source = ${p(f.source)}`);
   if (f.minEur != null) w.push(`v.amount_eur_minor >= ${p(f.minEur)}`);
   if (f.maxEur != null) w.push(`coalesce(v.amount_eur_minor, 0) <= ${p(f.maxEur)}`);
+  if (f.fromDate) w.push(`v.ordered_at >= ${p(f.fromDate)}::date`);
+  if (f.toDate) w.push(`v.ordered_at < ${p(f.toDate)}::date`);
+  if (f.suggested === 'consumable') w.push('v.suggested_kind IS NOT NULL AND NOT v.suggestion_rejected');
+  else if (f.suggested) w.push(`v.suggested_kind = ${p(f.suggested)} AND NOT v.suggestion_rejected`);
+  if (f.ids) w.push(`v.id = ANY(${p(f.ids)}::uuid[])`);
   return w.length ? `WHERE ${w.join(' AND ')}` : '';
 }
 
@@ -446,6 +467,44 @@ export async function bulkDecide(
     );
     return updated.rowCount ?? 0;
   });
+}
+
+// ── consumable suggestions ─────────────────────────────────────────────────
+
+/**
+ * (Re)computes the consumable suggestion for lines whose stored suggestion is from an older
+ * rules version (or none). Cheap: titles are matched in memory. Returns how many changed.
+ */
+export async function refreshSuggestions(pool: Pool, householdId?: string): Promise<number> {
+  const { rows } = await pool.query<{ id: string; title: string; title_translated: string | null; merchant: string | null }>(
+    `SELECT l.id, l.title, l.title_translated, p.merchant FROM purchase_line l JOIN purchase p ON p.id = l.purchase_id
+      WHERE l.suggestion_v IS DISTINCT FROM $1 AND ($2::uuid IS NULL OR l.household_id = $2)`,
+    [CONSUMABLE_RULES_VERSION, householdId ?? null],
+  );
+  for (let i = 0; i < rows.length; i += 2000) {
+    const chunk = rows.slice(i, i + 2000);
+    await pool.query(
+      `UPDATE purchase_line l SET suggested_kind = x.kind, suggestion_v = $3
+         FROM unnest($1::uuid[], $2::text[]) AS x(id, kind) WHERE l.id = x.id`,
+      [chunk.map((r) => r.id), chunk.map((r) => classifyConsumable({ title: r.title, titleTranslated: r.title_translated, merchant: r.merchant })), CONSUMABLE_RULES_VERSION],
+    );
+  }
+  return rows.length;
+}
+
+/** "Not a consumable" (or undo of that) for one line. */
+export async function setSuggestionRejected(pool: Pool, actor: Actor, id: string, rejected: boolean): Promise<LineView> {
+  await tx(pool, async (c) => {
+    const cur = await lockLine(c, actor, id);
+    const r = await c.query<{ suggestion_rejected: boolean }>('SELECT suggestion_rejected FROM purchase_line WHERE id = $1', [cur.id]);
+    if (r.rows[0]!.suggestion_rejected === rejected) return;
+    await c.query('UPDATE purchase_line SET suggestion_rejected = $2 WHERE id = $1', [id, rejected]);
+    await writeEvent(c, actor, {
+      type: 'purchase_line.suggestion', entity: 'purchase_line', entityId: id,
+      before: { suggestion_rejected: !rejected }, after: { suggestion_rejected: rejected },
+    });
+  });
+  return getLine(pool, actor.householdId, actor.memberId, id);
 }
 
 // ── spending report ────────────────────────────────────────────────────────

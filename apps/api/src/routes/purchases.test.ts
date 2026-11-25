@@ -116,4 +116,21 @@ describe('imports, possession check and spending', () => {
     const facets = (await t.app.inject({ url: '/api/v1/possession/facets' })).json();
     expect(facets.merchants).toEqual(['Amazon.com', 'Amazon.de', 'Example Garden']);
   });
+
+  it('lists likely consumables from a date on, takes "not a consumable", marks selected lines', async () => {
+    const csv = Buffer.from('Date,Title,Price,Currency,Shop\n2025-02-01,Espresso beans 1 kg,19.90,EUR,Example Roastery\n2025-02-01,Dish soap 3x,6.00,EUR,Example Roastery\n2025-02-01,Toothpaste 75ml,3.00,EUR,Example Roastery\n2025-02-01,Coffee grinder,89.00,EUR,Example Roastery\n');
+    expect((await post('/api/v1/imports', form({ name: 'roastery.csv', data: csv }))).statusCode).toBe(201);
+    const list = async () => (await t.app.inject({ url: '/api/v1/possession?suggested=consumable&from_date=2025-01-01&sort=date' })).json();
+    let page = await list();
+    expect(page.lines.map((l: { title: string }) => l.title).sort()).toEqual(['Espresso beans 1 kg', 'Toothpaste 75ml']);
+    const tooth = page.lines.find((l: { title: string }) => l.title.startsWith('Tooth'));
+    expect(tooth.suggested_kind).toBe('supplies');
+    const rej = await t.app.inject({ method: 'POST', url: `/api/v1/possession/${tooth.id}/suggestion`, payload: { rejected: true } });
+    expect(rej.json().suggestion_rejected).toBe(true);
+    page = await list();
+    expect(page.total).toBe(1);
+    const bulk = await t.app.inject({ method: 'POST', url: '/api/v1/possession/bulk', payload: { ids: [page.lines[0].id], status: 'gone', gone_reason: 'consumed' } });
+    expect(bulk.json()).toEqual({ updated: 1 });
+    expect((await list()).total).toBe(0);
+  });
 });

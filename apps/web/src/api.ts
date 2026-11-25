@@ -90,6 +90,8 @@ export interface PurchaseLine {
   status: Possession;
   reason: GoneReason | null;
   auto_rule: string | null;
+  suggested_kind: 'food' | 'supplies' | null;
+  suggestion_rejected: boolean;
   source: string;
   merchant: string | null;
   ordered_at: string | null;

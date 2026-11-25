@@ -9,7 +9,9 @@ import {
   lineFacets,
   listImportRuns,
   listLines,
+  refreshSuggestions,
   resetLine,
+  setSuggestionRejected,
   spendingReport,
   upsertFxRates,
   type Actor,
@@ -42,6 +44,8 @@ export const purchaseLineSchema = {
     status: { type: 'string', enum: POSSESSION, description: 'effective: "gone" once the linked item is sold, given away, used up, …' },
     reason: reasonOrNull,
     auto_rule: nstr, decided_at: { anyOf: [timestamp, { type: 'null' }] },
+    suggested_kind: { anyOf: [{ type: 'string', enum: ['food', 'supplies'] }, { type: 'null' }], description: 'rule-based guess: a consumable' },
+    suggestion_rejected: { type: 'boolean', description: 'someone said it is not a consumable' },
     source: str, merchant: nstr, external_order_id: nstr, ordered_at: nstr,
   },
   required: ['id', 'title', 'quantity', 'amount_minor', 'currency', 'amount_eur_minor', 'status', 'reason', 'possession', 'ordered_at', 'merchant'],
@@ -67,6 +71,9 @@ const filterProps = {
   source: { type: 'string', maxLength: 40 },
   min_eur: { type: 'integer', minimum: 0, description: 'minor units (cents)' },
   max_eur: { type: 'integer', minimum: 0, description: 'minor units (cents)' },
+  from_date: { type: 'string', format: 'date', description: 'ordered on or after' },
+  to_date: { type: 'string', format: 'date', description: 'ordered before' },
+  suggested: { type: 'string', enum: ['consumable', 'food', 'supplies'], description: 'only lines the rules take for consumables (or one kind of them)' },
 } as const;
 
 interface FilterQuery {
@@ -76,9 +83,14 @@ interface FilterQuery {
   source?: string;
   min_eur?: number;
   max_eur?: number;
+  from_date?: string;
+  to_date?: string;
+  suggested?: 'consumable' | 'food' | 'supplies';
+  ids?: string[];
 }
 const toFilter = (q: FilterQuery): LineFilter => ({
   q: q.q, year: q.year, merchant: q.merchant, source: q.source, minEur: q.min_eur, maxEur: q.max_eur,
+  fromDate: q.from_date, toDate: q.to_date, suggested: q.suggested, ids: q.ids,
 });
 
 interface Upload {
@@ -216,6 +228,7 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
     const run = await importPurchases(pool(), actorOf(req), {
       source: r.source, format: r.format, filename: up.filename.slice(0, 300), sha256: sha256(up.buf), rowsRead: r.rowCount, errors: r.errors,
     }, r.purchases, { skipKnownOrders: up.fields.skip_known_orders !== '0' });
+    await refreshSuggestions(pool(), actorOf(req).householdId);
     // Foreign currencies need reference rates; fetch them in the background when missing or stale.
     if (r.purchases.some((p) => p.lines.some((l) => l.currency && l.currency !== 'EUR'))) {
       const s = await fxStatus(pool());
@@ -293,12 +306,25 @@ export async function purchaseRoutes(app: FastifyInstance): Promise<void> {
     schema: { summary: 'Undo a decision (back to pending; removes the item it created while that is untouched)', tags: ['possession'], params: idParams, response: { 200: { $ref: 'PurchaseLine#' } } },
   }, async (req) => resetLine(pool(), actorOf(req), req.params.id));
 
+  app.post<{ Params: { id: string }; Body: { rejected: boolean } }>('/api/v1/possession/:id/suggestion', {
+    schema: {
+      summary: '"Not a consumable" (rejected: true) or undo that, for one line', tags: ['possession'], params: idParams,
+      body: { type: 'object', properties: { rejected: { type: 'boolean' } }, required: ['rejected'], additionalProperties: false },
+      response: { 200: { $ref: 'PurchaseLine#' } },
+    },
+  }, async (req) => setSuggestionRejected(pool(), actorOf(req), req.params.id, req.body.rejected));
+
   app.post<{ Body: FilterQuery & { status: 'gone' | 'ignored'; gone_reason?: GoneReason | null } }>('/api/v1/possession/bulk', {
     schema: {
       summary: 'Mark every pending line matching the filter as gone or ignored (never creates items)', tags: ['possession'],
       body: {
         type: 'object',
-        properties: { ...filterProps, status: { type: 'string', enum: ['gone', 'ignored'] }, gone_reason: reasonOrNull },
+        properties: {
+          ...filterProps,
+          ids: { type: 'array', items: uuid, minItems: 1, maxItems: 5000, description: 'only these lines (still only pending ones)' },
+          status: { type: 'string', enum: ['gone', 'ignored'] },
+          gone_reason: reasonOrNull,
+        },
         required: ['status'], additionalProperties: false,
       },
       response: { 200: { type: 'object', properties: { updated: { type: 'integer' } }, required: ['updated'] } },

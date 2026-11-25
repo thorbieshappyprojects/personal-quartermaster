@@ -1,4 +1,4 @@
-import { createPool, migrate } from '@pq/db';
+import { createPool, migrate, refreshSuggestions } from '@pq/db';
 import { buildApp } from './app';
 import { ConfigError, loadConfig } from './config';
 
@@ -23,6 +23,10 @@ async function main(): Promise<void> {
     await pool.end();
     process.exit(1);
   }
+
+  // Consumable suggestions follow the rules shipped with this version.
+  const refreshed = await refreshSuggestions(pool);
+  if (refreshed) console.log(`consumable suggestions: ${refreshed} lines updated`);
 
   const app = await buildApp({ config, pool });
   const shutdown = async (signal: string) => {

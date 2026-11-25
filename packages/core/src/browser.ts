@@ -5,3 +5,4 @@ export * from './lifecycle';
 export * from './money';
 export * from './search';
 export * from './purchases';
+export * from './consumables';

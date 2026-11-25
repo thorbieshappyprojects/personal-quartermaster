@@ -2,6 +2,7 @@ import { render } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { CategoriesPage } from './pages/Categories';
 import { CheckPage } from './pages/Check';
+import { ConsumablesPage } from './pages/Consumables';
 import { ImportPage } from './pages/Import';
 import { SpendingPage } from './pages/Spending';
 import { ItemDetailPage } from './pages/ItemDetail';
@@ -26,6 +27,7 @@ function Page() {
   if (pathname() === '/more') return <MorePage />;
   if (pathname() === '/history') return <CheckPage />;
   if (pathname() === '/history/import') return <ImportPage />;
+  if (pathname() === '/history/consumables') return <ConsumablesPage />;
   if (pathname() === '/history/spending') return <SpendingPage />;
   return (
     <main>
